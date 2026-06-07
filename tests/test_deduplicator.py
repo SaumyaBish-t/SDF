@@ -1,6 +1,7 @@
 """Tests for pipeline.deduplicator — MinHash layer, cosine layer, embedding."""
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -183,8 +184,12 @@ async def test_cosine_layer_passes_dissimilar_embedding(
     store, monkeypatch
 ) -> None:
     # Map text to its hash bucket so each prompt gets a distinct vector.
+    # Use md5 (not Python's hash()) because hash() is salted per-process via
+    # PYTHONHASHSEED — some salts produce vectors that cross the 0.92 cosine
+    # threshold and flake this test.
     def _vec(text: str) -> list[float]:
-        seed = (hash(text) % 1000) / 1000.0
+        digest = int(hashlib.md5(text.encode()).hexdigest(), 16)
+        seed = (digest % 1000) / 1000.0
         return [seed + 0.001 * i for i in range(EMBED_DIM)]
 
     _patch_embed(monkeypatch, _vec)
