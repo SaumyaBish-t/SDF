@@ -68,6 +68,7 @@ async def _stub_full_score(scored, domain):
 class _StubStore:
     async def __aenter__(self):
         self.rows = []
+        self.embeddings: list[list[float]] = []
         return self
 
     async def __aexit__(self, *exc):
@@ -75,9 +76,13 @@ class _StubStore:
 
     async def write(self, accepted, taxonomy_node):
         self.rows.append((accepted.judged.scored.raw.example_id, taxonomy_node))
+        self.embeddings.append(list(accepted.embedding))
 
     async def nearest_similarity(self, embedding):
         return 0.0
+
+    async def all_embeddings(self, domain=None):
+        return list(self.embeddings)
 
 
 class _StubDedup:
@@ -165,6 +170,9 @@ def test_checkpoint_written_on_completion(patched_pipeline):
     payload = json.loads(ckpt_files[-1].read_text(encoding="utf-8"))
     assert payload["accepted_count"] == summary["accepted"]
     assert payload["domain"] == _DOMAIN
+    # Vendi score wired in Session 13 — present on the final checkpoint.
+    assert payload["vendi_score"] is not None
+    assert payload["vendi_score"] >= 0.0
 
 
 def test_resume_skips_completed_node_sets(patched_pipeline, monkeypatch):

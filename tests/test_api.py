@@ -152,6 +152,69 @@ async def test_coverage_endpoint(client, monkeypatch):
     assert body["domain"] == "customer_support"
     assert body["dimension"] == "topic"
     assert body["counts"] == {"billing_dispute": 4, "refund_request": 7}
+    assert body["gaps"] == {}
+
+
+async def test_coverage_endpoint_with_expected_returns_gaps(client, monkeypatch):
+    ac, _ = client
+
+    class _StubStore:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *exc):
+            return None
+        async def coverage(self, domain, dimension):
+            return {"a": 2, "b": 5, "c": 1}
+
+    monkeypatch.setattr(routes_module, "Store", _StubStore)
+    r = await ac.get(
+        "/coverage/customer_support",
+        params={"dimension": "topic", "expected_per_value": 4},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # 'b' is satisfied; 'c' has deficit 3; 'a' has deficit 2.
+    assert body["gaps"] == {"c": 3, "a": 2}
+
+
+async def test_diversity_endpoint(client, monkeypatch):
+    ac, _ = client
+
+    class _StubStore:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *exc):
+            return None
+        async def all_embeddings(self, domain=None):
+            # Two orthogonal vectors → Vendi score == 2.0.
+            return [[1.0, 0.0], [0.0, 1.0]]
+
+    monkeypatch.setattr(routes_module, "Store", _StubStore)
+    r = await ac.get("/diversity/customer_support")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["domain"] == "customer_support"
+    assert body["n_examples"] == 2
+    assert abs(body["vendi_score"] - 2.0) < 1e-6
+
+
+async def test_diversity_endpoint_empty_store(client, monkeypatch):
+    ac, _ = client
+
+    class _StubStore:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *exc):
+            return None
+        async def all_embeddings(self, domain=None):
+            return []
+
+    monkeypatch.setattr(routes_module, "Store", _StubStore)
+    r = await ac.get("/diversity/customer_support")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_examples"] == 0
+    assert body["vendi_score"] == 0.0
 
 
 async def test_validation_rejects_zero_target(client):

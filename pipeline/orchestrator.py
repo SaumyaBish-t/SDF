@@ -34,6 +34,7 @@ import config
 from models import JudgedExample, NodeSet, RawExample, ScoredExample
 from pipeline import checkpoint as ck
 from pipeline.critic_prefilter import prefilter_batch, round_robin_prefilter_keys
+from pipeline.diversity import compute_vendi_score
 from pipeline.critic_scorer import full_score
 from pipeline.deduplicator import Deduplicator
 from pipeline.generator import generate_batch, round_robin_keys
@@ -313,7 +314,7 @@ async def _dedup_writer_worker(
             )
 
             if count % config.CHECKPOINT_INTERVAL == 0:
-                await _save_checkpoint(state, count, last_idx)
+                await _save_checkpoint(state, count, last_idx, store=store)
 
             if count >= state.target:
                 _log.info("target %d reached — signalling shutdown", state.target)
@@ -325,7 +326,21 @@ async def _dedup_writer_worker(
 # ---------------------------------------------------------------------------
 # Checkpointing
 # ---------------------------------------------------------------------------
-async def _save_checkpoint(state: _RunState, accepted: int, last_idx: int) -> None:
+async def _save_checkpoint(
+    state: _RunState,
+    accepted: int,
+    last_idx: int,
+    *,
+    store: Optional[Store] = None,
+) -> None:
+    vendi_score: Optional[float] = None
+    if store is not None:
+        try:
+            embeddings = await store.all_embeddings(domain=state.domain)
+            vendi_score = compute_vendi_score(embeddings)
+        except Exception:  # noqa: BLE001 — diagnostics, never block a checkpoint
+            _log.exception("vendi-score computation failed (accepted=%d)", accepted)
+
     try:
         await ck.save_checkpoint(
             run_id=state.run_id,
@@ -334,6 +349,7 @@ async def _save_checkpoint(state: _RunState, accepted: int, last_idx: int) -> No
             last_node_idx=last_idx,
             target=state.target,
             rejected_count=state.rejected_count,
+            vendi_score=vendi_score,
         )
     except Exception:  # noqa: BLE001 — never fail the run on a checkpoint hiccup
         _log.exception("checkpoint save failed (accepted=%d)", accepted)
@@ -502,7 +518,9 @@ async def run(
         await writer_task
 
         # ---- final checkpoint ---------------------------------------------
-        await _save_checkpoint(state, state.accepted_count, state.last_node_idx)
+        await _save_checkpoint(
+            state, state.accepted_count, state.last_node_idx, store=store,
+        )
 
     _log.info(
         "run complete: accepted=%d rejected=%d (minhash=%d cosine=%d) output=%s",

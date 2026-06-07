@@ -438,7 +438,55 @@ Job lifecycle:
 Module seams for tests: `orchestrator.run` and `Store` are looked up on the
   routes module, so they can be monkeypatched directly.
 Side effects: spawns `asyncio.create_task` per POST /runs; logs to
-  `sdf.api`. Opens Store on /coverage requests.
+  `sdf.api`. Opens Store on /coverage and /diversity requests.
+
+---
+
+## pipeline/diversity.py
+Last updated: Session 13
+Purpose: Diversity metrics + coverage gap analytics (PROJECT_SPEC §6/§7).
+  Pure helpers — no IO; the orchestrator and API fetch from Store and pass
+  the data in.
+Public API:
+  - `compute_vendi_score(embeddings: Sequence[Sequence[float]]) -> float`
+      Vendi score on L2-normalized embeddings using
+      `vendi_score.vendi.score_dual` (linear kernel on normalized inputs
+      == cosine kernel — matches the dedup layer's similarity space).
+      Returns 0.0 for n<2 (undefined). Zero-vector rows are guarded so
+      they cannot produce NaN. Range: [1, n] on valid input.
+  - `coverage_gaps(coverage: dict[str, int], expected_per_value: int)
+        -> dict[str, int]`
+      Returns {value: deficit} for values below `expected_per_value`,
+      sorted descending by deficit. Empty dict if `expected_per_value<=0`
+      or every value is satisfied.
+  - `coverage_deficit_total(coverage, expected_per_value) -> int`
+      Sum of deficits — single-number coverage health.
+Side effects: none (compute-only).
+
+---
+
+## pipeline/orchestrator.py — Session 13 changes
+`_save_checkpoint` now takes an optional `store: Store` kwarg. When
+  supplied, fetches `store.all_embeddings(domain)` and computes
+  `compute_vendi_score(...)`, persisting it in the checkpoint payload
+  (previously always null). Computation failures are logged and the
+  vendi field falls back to None — checkpointing never blocks on
+  diversity diagnostics.
+Both the periodic checkpoint (every `CHECKPOINT_INTERVAL`) and the final
+  end-of-run checkpoint now pass `store=store`.
+
+---
+
+## api/routes.py — Session 13 changes
+New response models:
+  - `CoverageResponse` gains a `gaps: dict[str, int]` field (empty unless
+    `expected_per_value` query param is provided).
+  - `DiversityResponse(domain, n_examples, vendi_score)`.
+New / updated endpoints:
+  - `GET /coverage/{domain}?dimension=X&expected_per_value=Y` — Y is
+    optional; when present, response includes `gaps` (value → deficit).
+  - `GET /diversity/{domain}` — returns the Vendi score over all
+    accepted embeddings for the domain (`Store.all_embeddings`).
 
 ---
 

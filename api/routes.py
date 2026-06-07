@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 import config
 from pipeline import checkpoint as ck
 from pipeline import orchestrator
+from pipeline.diversity import compute_vendi_score, coverage_gaps
 from storage.store import Store
 
 
@@ -67,6 +68,13 @@ class CoverageResponse(BaseModel):
     domain: str
     dimension: str
     counts: dict[str, int]
+    gaps: dict[str, int] = Field(default_factory=dict)
+
+
+class DiversityResponse(BaseModel):
+    domain: str
+    n_examples: int
+    vendi_score: float
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +208,31 @@ async def export_run(job_id: str, request: Request) -> FileResponse:
 
 
 @router.get("/coverage/{domain}", response_model=CoverageResponse)
-async def coverage(domain: str, dimension: str) -> CoverageResponse:
-    """Counts of accepted examples per taxonomy value for one dimension."""
+async def coverage(
+    domain: str,
+    dimension: str,
+    expected_per_value: Optional[int] = None,
+) -> CoverageResponse:
+    """Counts of accepted examples per taxonomy value for one dimension.
+
+    If `expected_per_value` is provided, the response also includes a
+    `gaps` map of {value: deficit} for under-represented values.
+    """
     async with Store() as store:
         counts = await store.coverage(domain=domain, dimension=dimension)
-    return CoverageResponse(domain=domain, dimension=dimension, counts=counts)
+    gaps = coverage_gaps(counts, expected_per_value) if expected_per_value else {}
+    return CoverageResponse(
+        domain=domain, dimension=dimension, counts=counts, gaps=gaps,
+    )
+
+
+@router.get("/diversity/{domain}", response_model=DiversityResponse)
+async def diversity(domain: str) -> DiversityResponse:
+    """Vendi-score diversity of all accepted embeddings in the domain."""
+    async with Store() as store:
+        embeddings = await store.all_embeddings(domain=domain)
+    return DiversityResponse(
+        domain=domain,
+        n_examples=len(embeddings),
+        vendi_score=compute_vendi_score(embeddings),
+    )
