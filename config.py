@@ -88,6 +88,15 @@ GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_1, KEY_2)
 PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (KEY_3, KEY_4)
 FULL_SCORER_KEY: Final[KeyRole] = KEY_5
 
+# Per-model sampling temperatures (PROJECT_SPEC.md §5).
+# Keyed by KeyRole.model string so generator.py needs no model-name conditionals.
+GEN_TEMPERATURE: Final[dict[str, float]] = {
+    KEY_1.model: 0.9,
+    KEY_2.model: 0.85,
+}
+GEN_MAX_TOKENS: Final[int] = 4096
+GEN_DEFAULT_BATCH_SIZE: Final[int] = 10  # examples per generator call
+
 
 # ---------------------------------------------------------------------------
 # Quality thresholds

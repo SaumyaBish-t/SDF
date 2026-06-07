@@ -109,3 +109,35 @@ Side effects: none.
 
 ---
 
+## pipeline/generator.py
+Last updated: Session 5
+Purpose: Produce RawExample batches from NIM generator endpoints (KEY_1/KEY_2).
+Public API:
+  - `parse_json_array(text: str) -> list[dict]`
+      Tolerant parser: strips ``` fences, falls back to greedy [...] regex,
+      drops non-dict items. Returns [] on total failure (soft retry signal).
+  - `build_meta_prompt(node_set: NodeSet, batch_size: int) -> str`
+      Renders the PROJECT_SPEC §4 meta-prompt with the NodeSet's dimensions
+      embedded as JSON. Tells the model: no markdown, no code fences.
+  - `round_robin_keys() -> Iterator[KeyRole]`
+      Endless `itertools.cycle` over GENERATOR_KEYS for fair scheduling.
+  - `async generate_batch(
+        node_set: NodeSet,
+        key: KeyRole | None = None,
+        batch_size: int | None = None,
+    ) -> list[RawExample]`
+      One generator call. Wraps the HTTP request in `utils.with_retry`
+      (3 attempts, exponential backoff). Bounded by a per-key semaphore
+      sized to `KeyRole.batch_size`. Defaults: key=KEY_1, batch_size=
+      config.GEN_DEFAULT_BATCH_SIZE. Items missing instruction/response
+      are silently skipped; full-batch parse failure logs and returns [].
+Queue produced (downstream): `raw_queue` (RawExample). Orchestrator wires
+  the call site, not this module.
+Module seam for tests: `_make_client(api_key) -> AsyncOpenAI` — monkeypatch
+  this to inject a fake client.
+Side effects: writes INFO/WARN logs to logger `sdf.generator`. No file IO.
+Config touched: GEN_TEMPERATURE, GEN_MAX_TOKENS, GEN_DEFAULT_BATCH_SIZE
+  added to config.py (Session 5).
+
+---
+
