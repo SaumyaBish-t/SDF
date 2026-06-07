@@ -477,6 +477,33 @@ Both the periodic checkpoint (every `CHECKPOINT_INTERVAL`) and the final
 
 ---
 
+## cli.py
+Last updated: Session 14
+Purpose: Command-line driver for the same primitives the FastAPI layer
+  exposes. All subcommands print JSON to stdout for easy piping.
+Public API:
+  - `main(argv: list[str] | None = None) -> int` — returns a process
+    exit code (0 success, 1 for "no checkpoint found" on `status`).
+  - `build_parser() -> argparse.ArgumentParser` — exposed for tests so
+    they don't need to shell out.
+Subcommands:
+  - `run --domain X --target N [--seed N] [--output PATH]
+        [--gen-batch-size N] [--no-resume]`
+        → calls `pipeline.orchestrator.run` and prints the summary dict.
+  - `status [--domain D]` → `pipeline.checkpoint.load_latest`. Exit 1
+        with `{"status":"no_checkpoint"}` when none exists.
+  - `list-domains` → `taxonomy.builder.list_domains()`.
+  - `coverage --domain X --dimension Y [--expected N]` → opens Store,
+        returns counts + (if expected given) gaps via `coverage_gaps`.
+  - `diversity --domain X` → opens Store, computes
+        `compute_vendi_score(store.all_embeddings(domain))`.
+Module seams for tests: subcommand handlers import their deps lazily,
+  so tests monkeypatch the dotted attribute (e.g.
+  `monkeypatch.setattr("pipeline.orchestrator.run", _stub)`).
+Side effects: stdout JSON only; opens Store for `coverage`/`diversity`.
+
+---
+
 ## api/routes.py — Session 13 changes
 New response models:
   - `CoverageResponse` gains a `gaps: dict[str, int]` field (empty unless
