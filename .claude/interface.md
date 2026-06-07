@@ -14,4 +14,24 @@ Never import directly from .env anywhere except config.py.
 
 ---
 
-*Remaining entries added after each session.*
+## utils.py
+Last updated: Session 2
+Purpose: Cross-cutting helpers — exponential-backoff retry + file logging.
+Public API:
+  - `setup_logging() -> logging.Logger`
+      Returns the "sdf" logger. Idempotent. Configures a RotatingFileHandler
+      writing to `config.LOG_FILE` (10MB × 5 backups, UTF-8). Sets
+      `propagate=False` so nothing leaks to stdout.
+  - `with_retry(fn, *args, _op_name: str | None = None, **kwargs) -> T`
+      Async retry wrapper. Up to `config.MAX_RETRIES` attempts, sleeps
+      `config.BACKOFF_BASE_SECONDS ** attempt` between tries. Logs every
+      failure to logger `sdf.retry` (warning per retry, error on final).
+      Re-raises the last exception when all attempts fail.
+Import pattern:
+  `from utils import with_retry, setup_logging`
+Side effects: creates `logs/` directory if absent; writes to `logs/pipeline.log`.
+Logger names used by pipeline code: child loggers under "sdf.*"
+  (e.g. "sdf.generator", "sdf.critic.prefilter").
+
+---
+
