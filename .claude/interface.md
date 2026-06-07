@@ -286,3 +286,63 @@ Threading: MinHashLSH is not thread-safe; runs on a single consumer task.
 
 ---
 
+## pipeline/writer.py
+Last updated: Session 10
+Purpose: HuggingFace-compatible JSONL output per PROJECT_SPEC §9.
+Public API:
+  - `render_record(
+        accepted: AcceptedExample,
+        taxonomy_node: dict[str, str],
+        *, nearest_neighbor_similarity: float | None = None,
+        generation_pass: int = 1,
+        difficulty_level: int | None = None,
+        reasoning_trace: str | None = None,
+        timestamp: datetime | None = None,
+    ) -> dict`
+      Pure function. Returns the HF-shaped dict (top-level: id, instruction,
+      response, reasoning_trace, metadata). Default timestamp is now-UTC,
+      formatted `YYYY-MM-DDTHH:MM:SSZ`.
+  - `async write_jsonl(accepted, path, taxonomy_node, **render_kwargs) -> None`
+      Appends one JSON line to `path`. Creates parent dirs. UTF-8 with
+      `ensure_ascii=False` so Indic/CJK survives. File IO via
+      `asyncio.to_thread`.
+Output schema (top-level keys): id, instruction, response, reasoning_trace,
+  metadata{taxonomy_node, generator_model, critic_scores, composite_score,
+  nearest_neighbor_similarity, generation_pass, difficulty_level, timestamp}.
+Side effects: writes to disk; debug log to `sdf.writer`.
+
+---
+
+## pipeline/checkpoint.py
+Last updated: Session 10
+Purpose: Per-run progress snapshots per PROJECT_SPEC §10. One file per save
+  (never overwritten) so a corrupt write can't destroy the last good state.
+Public API:
+  - `make_run_id(domain: str, when: datetime | None = None) -> str`
+      Format: `run_{YYYYmmdd_HHMMSS}_{sanitized_domain}`. Domain
+      sanitization replaces any char outside `[A-Za-z0-9_-]` with `_`.
+  - `async save_checkpoint(
+        run_id: str, domain: str,
+        accepted_count: int, last_node_idx: int,
+        *, target: int | None = None,
+        rejected_count: int = 0,
+        vendi_score: float | None = None,
+        taxonomy_coverage: dict[str, int] | None = None,
+        extra: dict | None = None,
+        directory: Path | None = None,
+    ) -> Path`
+      Writes `{run_id}__{accepted_count:06d}.json` atomically (stage as
+      `.tmp`, then rename). Raises ValueError on unsafe run_id chars.
+      Default directory = config.CHECKPOINT_DIR.
+  - `async load_latest(domain: str | None = None, directory: Path | None = None)
+        -> dict | None`
+      Newest checkpoint by mtime; optional `domain` filter via filename
+      suffix match. Returns None on empty dir or unreadable JSON
+      (logged, not raised).
+Checkpoint payload keys: run_id, domain, target, accepted_count,
+  rejected_count, last_node_idx, vendi_score, taxonomy_coverage, timestamp,
+  extra (optional).
+Side effects: writes to disk; INFO log to `sdf.checkpoint`.
+
+---
+
