@@ -396,3 +396,49 @@ Side effects: opens Store (DuckDB+LanceDB), writes JSONL + checkpoints,
 
 ---
 
+## api/app.py
+Last updated: Session 12
+Purpose: FastAPI application entrypoint.
+Public API:
+  - `create_app() -> FastAPI` — builds a new app instance with logging
+    initialised and a fresh `JobRegistry` on `app.state.jobs`. Tests use
+    this; production uses the module-level `app = create_app()`.
+Run: `uvicorn api.app:app --reload`.
+Side effects: calls `utils.setup_logging()` on import.
+
+---
+
+## api/routes.py
+Last updated: Session 12
+Purpose: REST layer per PROJECT_SPEC §A. Thin shell around the orchestrator
+  and Store — no long-running work lives here.
+Endpoints:
+  - `GET  /healthz`                 → `{"status":"ok"}`
+  - `POST /runs`                    → start a run (body: StartRunRequest).
+      Returns 202 + JobInfo with status="running".
+  - `GET  /runs`                    → list[JobInfo] from in-memory registry.
+  - `GET  /runs/{job_id}`           → JobInfo. While status="running",
+      response is augmented with the latest checkpoint counters via
+      `checkpoint.load_latest(domain)`.
+  - `GET  /runs/{job_id}/export`    → FileResponse streaming the JSONL.
+      409 if output_path not populated yet; 404 if file missing.
+  - `GET  /coverage/{domain}?dimension=X` → CoverageResponse via Store.
+Request/response models (pydantic):
+  - `StartRunRequest(domain, target>0, seed?, resume=True, gen_batch_size?)`
+  - `JobInfo(job_id, domain, target, status, run_id?, output_path?,
+              accepted, rejected, last_node_idx, error?)`
+  - `CoverageResponse(domain, dimension, counts: dict[str,int])`
+Job lifecycle:
+  - `JobRegistry` on `app.state.jobs` holds {job_id → JobInfo} plus the
+    background asyncio.Task. job_id is a uuid4 hex (32 chars), generated
+    by the API. orchestrator.run picks/reuses the `run_id` internally; the
+    summary is stitched onto JobInfo when the task completes.
+  - Process-local — restarting the API drops in-flight job handles, but
+    checkpoint files persist on disk for resume.
+Module seams for tests: `orchestrator.run` and `Store` are looked up on the
+  routes module, so they can be monkeypatched directly.
+Side effects: spawns `asyncio.create_task` per POST /runs; logs to
+  `sdf.api`. Opens Store on /coverage requests.
+
+---
+
