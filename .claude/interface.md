@@ -35,3 +35,21 @@ Logger names used by pipeline code: child loggers under "sdf.*"
 
 ---
 
+## pipeline/queues.py
+Last updated: Session 3
+Purpose: Typed, bounded asyncio.Queue factories for the three pipeline boundaries.
+Public API:
+  - `make_raw_queue() -> asyncio.Queue[RawExample]`        (maxsize=QUEUE_RAW_MAXSIZE)
+  - `make_scored_queue() -> asyncio.Queue[ScoredExample]`  (maxsize=QUEUE_SCORED_MAXSIZE)
+  - `make_accepted_queue() -> asyncio.Queue[JudgedExample]` (maxsize=QUEUE_ACCEPTED_MAXSIZE)
+Queue schema (item types):
+  - raw_queue       : RawExample      (generator → pre_filter)
+  - scored_queue    : ScoredExample   (pre_filter → full_scorer)
+  - accepted_queue  : JudgedExample   (full_scorer → deduplicator/writer)
+Backpressure: bounded queues block on `put()` when full — slow downstream
+  throttles upstream automatically. Sizes come from config; do not pass
+  literals here.
+Side effects: none.
+
+---
+
