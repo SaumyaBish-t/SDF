@@ -104,6 +104,22 @@ PREFILTER_MAX_TOKENS: Final[int] = 1024
 PREFILTER_PASS_SCORE: Final[float] = 1.0
 PREFILTER_FAIL_SCORE: Final[float] = 0.0
 
+# Full scorer (KEY_5, DeepSeek R1) — 1-5 rubric per dimension.
+# Weights and dimension names from PROJECT_SPEC.md §6.
+FULL_SCORER_TEMPERATURE: Final[float] = 0.0   # deterministic judgment
+FULL_SCORER_MAX_TOKENS: Final[int] = 2048     # R1 emits reasoning + JSON
+
+RUBRIC_WEIGHTS: Final[dict[str, float]] = {
+    "factuality":          0.30,
+    "instruction_clarity": 0.20,
+    "response_quality":    0.25,
+    "domain_relevance":    0.15,
+    "format_compliance":   0.10,
+}
+RUBRIC_DIMENSIONS: Final[tuple[str, ...]] = tuple(RUBRIC_WEIGHTS.keys())
+RUBRIC_SCORE_MIN: Final[int] = 1
+RUBRIC_SCORE_MAX: Final[int] = 5
+
 
 # ---------------------------------------------------------------------------
 # Quality thresholds

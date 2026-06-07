@@ -176,3 +176,37 @@ Config touched: PREFILTER_TEMPERATURE, PREFILTER_MAX_TOKENS,
 
 ---
 
+## pipeline/critic_scorer.py
+Last updated: Session 7
+Purpose: Full rubric scoring with KEY_5 (DeepSeek R1) per PROJECT_SPEC §6.
+  Scores one ScoredExample at a time (KEY_5.batch_size=1).
+Public API:
+  - `build_scorer_prompt(scored: ScoredExample, domain: str) -> str`
+      Spec §6 prompt: 1-5 rubric across RUBRIC_DIMENSIONS, reject criteria,
+      what earns a 5. Includes the example's prompt + completion.
+  - `parse_rubric(text: str) -> dict[str, int]`
+      Strips ``` fences, json.loads with greedy `{...}` regex fallback.
+      Clamps scores to [RUBRIC_SCORE_MIN, RUBRIC_SCORE_MAX]. Drops bool
+      values (subclass of int — would otherwise sneak through), non-numeric
+      values, and unknown dimension keys. Missing dims omitted (caller
+      decides — `composite_score` treats missing as 0).
+  - `composite_score(rubric: dict[str, int]) -> float`
+      Weighted sum using config.RUBRIC_WEIGHTS. Missing dims = 0
+      (deliberate — incomplete rubric ⇒ low composite ⇒ likely reject).
+  - `verdict_for(score: float) -> Literal["accept","revise","reject"]`
+      `>= ACCEPT_THRESHOLD` → accept; `[REVISE_RANGE[0], REVISE_RANGE[1]]`
+      → revise; otherwise reject. Both boundaries inclusive.
+  - `async full_score(scored: ScoredExample, domain: str) -> JudgedExample`
+      One API call wrapped in `utils.with_retry`. On parse failure after
+      retries: returns JudgedExample with full_score=0.0, rubric={},
+      verdict="reject" (unscorable == rejected). Bounded by module-level
+      semaphore sized to KEY_5.batch_size (=1).
+Queue produced (downstream): `accepted_queue` (JudgedExample where
+  verdict='accept'); orchestrator may also route 'revise' to a revise_queue.
+Module seam for tests: `_make_client(api_key)` — monkeypatch to inject fake.
+Side effects: INFO/WARN logs to logger `sdf.critic.scorer`.
+Config touched: FULL_SCORER_TEMPERATURE, FULL_SCORER_MAX_TOKENS,
+  RUBRIC_WEIGHTS, RUBRIC_DIMENSIONS, RUBRIC_SCORE_MIN/MAX added (Session 7).
+
+---
+
