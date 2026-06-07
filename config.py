@@ -1,50 +1,136 @@
-"""Centralized config. Import everything from here — no magic numbers in pipeline code."""
+"""
+Central configuration for Synthetic Data Forge.
+
+All constants, model strings, thresholds, and key role assignments live here.
+Pipeline code MUST import from this module — no magic numbers elsewhere.
+"""
+
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Final
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root
+_PROJECT_ROOT = Path(__file__).resolve().parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
-NIM_BASE_URL: str = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+# ---------------------------------------------------------------------------
+# NIM endpoint
+# ---------------------------------------------------------------------------
+NIM_BASE_URL: Final[str] = os.getenv(
+    "NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"
+)
 
 
+# ---------------------------------------------------------------------------
+# Key role assignments
+# Frozen dataclass — role bindings MUST NOT be reassigned at runtime.
+# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class KeyRole:
-    api_key: str
-    model: str
-    role: str
-    batch_size: int
+    name: str           # logical role: generator | pre_filter | full_scorer
+    api_key: str        # value loaded from .env
+    model: str          # NIM model string
+    batch_size: int     # concurrent requests per batch
 
 
-def _require(name: str) -> str:
-    val = os.getenv(name, "")
+def _require_env(var: str) -> str:
+    val = os.getenv(var)
     if not val:
-        raise RuntimeError(f"Missing required env var: {name}")
+        raise RuntimeError(
+            f"Missing required environment variable: {var}. "
+            f"Copy .env.example to .env and fill in your NIM keys."
+        )
     return val
 
 
-KEY_1 = KeyRole(_require("NIM_KEY_1"), "deepseek-ai/deepseek-v4-flash",            "generator",    10)
-KEY_2 = KeyRole(_require("NIM_KEY_2"), "z-ai/glm4.7",                              "generator",    10)
-KEY_3 = KeyRole(_require("NIM_KEY_3"), "nvidia/nemotron-3-nano-30b-a3b",           "pre_filter",   3)
-KEY_4 = KeyRole(_require("NIM_KEY_4"), "mistralai/mistral-small-4-119b-2603",      "pre_filter",   3)
-KEY_5 = KeyRole(_require("NIM_KEY_5"), "deepseek-ai/deepseek-r1-0528",             "full_scorer",  1)
+KEY_1: Final[KeyRole] = KeyRole(
+    name="generator",
+    api_key=_require_env("NIM_KEY_1"),
+    model="deepseek-ai/deepseek-v4-flash",
+    batch_size=10,
+)
 
-GENERATORS = (KEY_1, KEY_2)
-PRE_FILTERS = (KEY_3, KEY_4)
-FULL_SCORER = KEY_5
+KEY_2: Final[KeyRole] = KeyRole(
+    name="generator",
+    api_key=_require_env("NIM_KEY_2"),
+    model="z-ai/glm4.7",
+    batch_size=10,
+)
 
-ACCEPT_THRESHOLD: float = 3.5
-REVISE_RANGE: tuple[float, float] = (3.0, 3.4)
-REJECT_BELOW: float = 3.0
-SIMILARITY_REJECT: float = 0.92
-MINHASH_THRESHOLD: float = 0.7
+KEY_3: Final[KeyRole] = KeyRole(
+    name="pre_filter",
+    api_key=_require_env("NIM_KEY_3"),
+    model="nvidia/nemotron-3-nano-30b-a3b",
+    batch_size=3,
+)
 
-CHECKPOINT_INTERVAL: int = 100
-MAX_RETRIES: int = 3
-BACKOFF_BASE: int = 2
+KEY_4: Final[KeyRole] = KeyRole(
+    name="pre_filter",
+    api_key=_require_env("NIM_KEY_4"),
+    model="mistralai/mistral-small-4-119b-2603",
+    batch_size=3,
+)
 
-CHECKPOINT_DIR: str = "checkpoints"
-LOG_DIR: str = "logs"
-OUTPUT_DIR: str = "output"
+KEY_5: Final[KeyRole] = KeyRole(
+    name="full_scorer",
+    api_key=_require_env("NIM_KEY_5"),
+    model="deepseek-ai/deepseek-r1-0528",
+    batch_size=1,
+)
+
+GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_1, KEY_2)
+PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (KEY_3, KEY_4)
+FULL_SCORER_KEY: Final[KeyRole] = KEY_5
+
+
+# ---------------------------------------------------------------------------
+# Quality thresholds
+# ---------------------------------------------------------------------------
+ACCEPT_THRESHOLD: Final[float] = 3.5
+REVISE_RANGE: Final[tuple[float, float]] = (3.0, 3.4)
+REJECT_BELOW: Final[float] = 3.0
+SIMILARITY_REJECT: Final[float] = 0.92   # cosine similarity ceiling
+MINHASH_THRESHOLD: Final[float] = 0.7    # Jaccard similarity for MinHash LSH
+
+
+# ---------------------------------------------------------------------------
+# Pipeline orchestration
+# ---------------------------------------------------------------------------
+QUEUE_RAW_MAXSIZE: Final[int] = 200       # generator -> pre_filter
+QUEUE_SCORED_MAXSIZE: Final[int] = 100    # pre_filter -> full_scorer
+QUEUE_ACCEPTED_MAXSIZE: Final[int] = 100  # full_scorer -> deduplicator
+
+CHECKPOINT_INTERVAL: Final[int] = 100     # accepted examples per checkpoint
+
+
+# ---------------------------------------------------------------------------
+# Retry / backoff (applies to every API call)
+# ---------------------------------------------------------------------------
+MAX_RETRIES: Final[int] = 3
+BACKOFF_BASE_SECONDS: Final[int] = 2      # delay = BACKOFF_BASE ** attempt
+
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+CHECKPOINT_DIR: Final[Path] = _PROJECT_ROOT / "checkpoints"
+LOG_DIR: Final[Path] = _PROJECT_ROOT / "logs"
+OUTPUT_DIR: Final[Path] = _PROJECT_ROOT / "output"
+LANCEDB_PATH: Final[Path] = _PROJECT_ROOT / "data" / "lancedb"
+DUCKDB_PATH: Final[Path] = _PROJECT_ROOT / "data" / "metadata.duckdb"
+
+for _d in (CHECKPOINT_DIR, LOG_DIR, OUTPUT_DIR, LANCEDB_PATH.parent):
+    _d.mkdir(parents=True, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_LEVEL: Final[str] = os.getenv("LOG_LEVEL", "INFO")
+LOG_FILE: Final[Path] = LOG_DIR / "pipeline.log"
