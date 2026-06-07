@@ -141,3 +141,38 @@ Config touched: GEN_TEMPERATURE, GEN_MAX_TOKENS, GEN_DEFAULT_BATCH_SIZE
 
 ---
 
+## pipeline/critic_prefilter.py
+Last updated: Session 6
+Purpose: Cheap binary pass/fail scoring on RawExamples (PROJECT_SPEC §6).
+  One NIM call scores an entire batch to amortize HTTP overhead.
+Public API:
+  - `build_prefilter_prompt(examples: Sequence[RawExample], domain: str) -> str`
+      Renders the spec §6 rubric with each example numbered by id.
+  - `parse_prefilter_response(text: str, batch_len: int) -> dict[int, bool]`
+      Tolerant parser for `[{"id":N,"pass":bool},...]`. Accepts 0/1 ints
+      for `pass`. Drops out-of-range ids, non-bool/non-{0,1} verdicts,
+      malformed items.
+  - `round_robin_prefilter_keys() -> Iterator[KeyRole]`
+      `cycle(KEY_3, KEY_4)`.
+  - `async prefilter_batch(
+        examples: Sequence[RawExample],
+        domain: str,
+        key: KeyRole | None = None,
+    ) -> list[ScoredExample]`
+      One ScoredExample per input, preserving input order. Examples the
+      critic omits → fail (conservative). Empty input short-circuits with
+      no API call. Default key=KEY_3. Raises ValueError if a non-prefilter
+      key is supplied. Wrapped in `utils.with_retry`; bounded by per-key
+      semaphore (KeyRole.batch_size=3 each).
+  - `filter_passing(scored: Sequence[ScoredExample]) -> list[ScoredExample]`
+      Keep only items at PREFILTER_PASS_SCORE — orchestrator uses between
+      scored_queue producers and the full_scorer stage.
+Queue produced (downstream): `scored_queue` (ScoredExample). Caller wires.
+Module seam for tests: `_make_client(api_key)` — monkeypatch to inject fake.
+Reuses: `pipeline.generator.parse_json_array` (shared tolerant array parser).
+Side effects: INFO/WARN logs to logger `sdf.critic.prefilter`.
+Config touched: PREFILTER_TEMPERATURE, PREFILTER_MAX_TOKENS,
+  PREFILTER_PASS_SCORE, PREFILTER_FAIL_SCORE added to config.py (Session 6).
+
+---
+

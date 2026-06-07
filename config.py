@@ -97,6 +97,13 @@ GEN_TEMPERATURE: Final[dict[str, float]] = {
 GEN_MAX_TOKENS: Final[int] = 4096
 GEN_DEFAULT_BATCH_SIZE: Final[int] = 10  # examples per generator call
 
+# Pre-filter critic settings (PROJECT_SPEC.md §6, binary pass/fail rubric).
+# Low temperature — we want stable judgment, not creativity.
+PREFILTER_TEMPERATURE: Final[float] = 0.2
+PREFILTER_MAX_TOKENS: Final[int] = 1024
+PREFILTER_PASS_SCORE: Final[float] = 1.0
+PREFILTER_FAIL_SCORE: Final[float] = 0.0
+
 
 # ---------------------------------------------------------------------------
 # Quality thresholds
