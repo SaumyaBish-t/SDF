@@ -12,12 +12,23 @@ from pydantic import BaseModel, Field
 
 
 class TaxonomyNode(BaseModel):
-    """Single node in the seed taxonomy tree."""
+    """Single node in the seed taxonomy tree (hierarchical view)."""
     node_id: str
     domain: str
     topic: str
     subtopic: Optional[str] = None
     depth: int
+
+
+class NodeSet(BaseModel):
+    """One sampled scenario — a value chosen for each taxonomy dimension.
+
+    Produced by the seed sampler, consumed by the generator's meta-prompt.
+    `dimensions` example: {"topic": "billing_dispute", "tone": "frustrated", ...}
+    """
+    node_id: str
+    domain: str
+    dimensions: dict[str, str]
 
 
 class RawExample(BaseModel):
