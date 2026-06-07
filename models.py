@@ -5,7 +5,7 @@ module avoids circular imports between pipeline stages.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -28,7 +28,7 @@ class RawExample(BaseModel):
     completion: str
     generator_model: str
     generator_key: Literal["KEY_1", "KEY_2"]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ScoredExample(BaseModel):
