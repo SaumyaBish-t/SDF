@@ -251,3 +251,38 @@ LanceDB API note: `list_tables()` may return either a plain list (~0.13)
 
 ---
 
+## pipeline/deduplicator.py
+Last updated: Session 9
+Purpose: Two-layer dedup before persistence (PROJECT_SPEC §7).
+  Layer 1: MinHash LSH on 5-grams (num_perm=128, Jaccard ≥ 0.7).
+  Layer 2: embedding via nv-embedcode-7b-v1 → LanceDB cosine
+           (similarity ≥ 0.92 rejects).
+Public API:
+  - `get_ngrams(text: str, n: int = 5) -> list[str]`
+      Lowercased character n-grams; short text → one token.
+  - `make_minhash(text, num_perm=128, n=5) -> MinHash`
+  - `signature_to_list(m: MinHash) -> list[int]`
+      Pydantic-friendly serialization for AcceptedExample.minhash_signature.
+  - `Deduplicator(store, num_perm=..., ngram_size=..., minhash_threshold=...,
+                  similarity_reject=..., embed_model=..., embed_api_key=...)`
+      All thresholds default from config. Holds in-memory MinHashLSH.
+  - `async Deduplicator.embed(text) -> list[float]`
+      One NIM `embeddings.create` call wrapped in `utils.with_retry`.
+  - `async Deduplicator.check(judged: JudgedExample) -> AcceptedExample | None`
+      Returns None on either-layer duplicate; AcceptedExample with embedding
+      + minhash_signature on survival. Raises ValueError on dim mismatch.
+      Does NOT mutate the LSH index — caller must call `register(...)`
+      after persisting so commit order stays explicit.
+  - `Deduplicator.register(example_id: str, text: str) -> None`
+      Idempotent insert into the LSH index.
+  - `Deduplicator.minhash_rejects / cosine_rejects / accepted: int`
+      Per-instance counters for orchestrator logging.
+Queue produced (downstream): `accepted_queue` (AcceptedExample); writer consumes.
+Module seam for tests: `_make_client(api_key)` — monkeypatch to inject fake.
+Side effects: INFO logs to logger `sdf.dedup`. No file IO (Store handles disk).
+Config touched: EMBED_MODEL, EMBED_API_KEY_ROLE, MINHASH_NUM_PERM,
+  MINHASH_NGRAM_SIZE added to config.py (Session 9).
+Threading: MinHashLSH is not thread-safe; runs on a single consumer task.
+
+---
+

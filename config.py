@@ -124,6 +124,14 @@ RUBRIC_SCORE_MAX: Final[int] = 5
 EMBEDDING_DIM: Final[int] = 1024  # nv-embedcode-7b-v1
 LANCE_TABLE_NAME: Final[str] = "examples"
 
+# Embedding endpoint (PROJECT_SPEC §7, free NIM model).
+EMBED_MODEL: Final[str] = "nvidia/nv-embedcode-7b-v1"
+EMBED_API_KEY_ROLE: Final[KeyRole] = KEY_5  # any valid NIM key works; reuse scorer's
+
+# Dedup — MinHash LSH layer (PROJECT_SPEC §7).
+MINHASH_NUM_PERM: Final[int] = 128
+MINHASH_NGRAM_SIZE: Final[int] = 5
+
 
 # ---------------------------------------------------------------------------
 # Quality thresholds
