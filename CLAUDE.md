@@ -62,5 +62,41 @@ On startup: check for latest checkpoint, resume from it if found.
 - The checkpoint interval (100 examples)
 - The quality threshold values
 
+## Full technical specification
+See .claude/PROJECT_SPEC.md for complete architecture, 
+research backing, quality scoring rubric, diversity 
+enforcement algorithm, output format spec, and all 
+architectural additions. Read it when building any 
+pipeline module.
+
+## Session discipline — NON-NEGOTIABLE
+
+### interfaces.md
+File location: .claude/interfaces.md
+This file MUST be created in Session 1 (empty, with just a header).
+At the END of every session, before committing, update it with 
+the interface contract for the module just built.
+
+Format to use:
+## [filepath]
+Last updated: Session N
+Input: [function params with types]
+Output: [return type and description]
+Queue schema (if applicable): [exact field names and types]
+Side effects: [what it logs, what files it writes]
+---
+
+Never delete existing entries. Only append.
+If a module is refactored, mark old entry as [DEPRECATED]
+and add new entry below it.
+
+### End of session checklist (run before every commit)
+1. Does the module pass its test command?
+2. Has interfaces.md been updated with this module's contract?
+3. Has CLAUDE.md "Built so far" section been updated?
+4. git commit with meaningful message?
+
+If any answer is NO — do not close the session.
+
 ## Repo
 https://github.com/SaumyaBish-t/SDF
