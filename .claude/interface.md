@@ -346,3 +346,53 @@ Side effects: writes to disk; INFO log to `sdf.checkpoint`.
 
 ---
 
+## pipeline/orchestrator.py
+Last updated: Session 11
+Purpose: Wires every stage through the three asyncio.Queues. Owns task
+  lifecycle, backpressure, graceful shutdown, checkpoint cadence, and
+  resume-from-checkpoint.
+Public API:
+  - `async run(
+        domain: str,
+        target: int,
+        *,
+        output_path: Path | None = None,
+        seed: int | None = None,
+        min_coverage: int = 3,
+        gen_batch_size: int | None = None,
+        n_scorer_workers: int = 2,
+        n_prefilter_workers: int = 2,
+        resume: bool = True,
+    ) -> dict`
+      Loads taxonomy, samples node_sets (3 × target with min-coverage),
+      optionally resumes from `checkpoint.load_latest(domain)`. Launches:
+        * 2 generator workers (one per GENERATOR_KEYS entry, semaphore-bounded
+          inside generator.py)
+        * `n_prefilter_workers` prefilter workers (alternating KEY_3/KEY_4 via
+          `round_robin_prefilter_keys`, each drains raw_queue into batches of
+          up to 3 before one prefilter call)
+        * `n_scorer_workers` scorer workers calling `full_score` (KEY_5)
+        * 1 dedup+writer task (single consumer — MinHashLSH is not thread-safe)
+      Shutdown: dedup writer sets `stop_event` on hitting `target`; sentinel
+      objects propagate through each queue so consumers exit cleanly.
+      Returns: {run_id, domain, target, accepted, rejected, last_node_idx,
+      output_path}.
+Queue wiring:
+  raw_queue (RawExample) → scored_queue (ScoredExample, only PASS) →
+  accepted_queue (JudgedExample where verdict='accept').
+Checkpoint cadence: every `config.CHECKPOINT_INTERVAL` accepts AND once at
+  the end of every run (success, target-hit, or exhaustion).
+Output: JSONL via `pipeline.writer.write_jsonl`; default path
+  `config.OUTPUT_DIR / {run_id}.jsonl`.
+Resume semantics: if a checkpoint for `domain` exists and `resume=True`,
+  reuses the same run_id, starts `_NodeSetCursor` at `last_node_idx + 1`,
+  and pre-seeds the counters. If already at target, returns immediately
+  without opening the store or writing JSONL.
+Module seams for tests: `generate_batch`, `prefilter_batch`, `full_score`,
+  `Store`, `Deduplicator` are all looked up via module attribute, so they
+  can be monkeypatched on `pipeline.orchestrator`.
+Side effects: opens Store (DuckDB+LanceDB), writes JSONL + checkpoints,
+  logs to `sdf.orchestrator` + child loggers per stage.
+
+---
+
