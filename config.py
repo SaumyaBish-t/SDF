@@ -120,6 +120,10 @@ RUBRIC_DIMENSIONS: Final[tuple[str, ...]] = tuple(RUBRIC_WEIGHTS.keys())
 RUBRIC_SCORE_MIN: Final[int] = 1
 RUBRIC_SCORE_MAX: Final[int] = 5
 
+# Storage (PROJECT_SPEC.md §8).
+EMBEDDING_DIM: Final[int] = 1024  # nv-embedcode-7b-v1
+LANCE_TABLE_NAME: Final[str] = "examples"
+
 
 # ---------------------------------------------------------------------------
 # Quality thresholds

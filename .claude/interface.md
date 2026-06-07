@@ -210,3 +210,44 @@ Config touched: FULL_SCORER_TEMPERATURE, FULL_SCORER_MAX_TOKENS,
 
 ---
 
+## storage/store.py
+Last updated: Session 8
+Purpose: Persistence layer — DuckDB for metadata + analytics, LanceDB for
+  vector storage + semantic-dedup queries (PROJECT_SPEC §8).
+  Both libs are sync; all calls run inside `asyncio.to_thread` so the
+  orchestrator's event loop is not blocked on disk IO.
+Public API:
+  - `Store(duckdb_path=None, lancedb_path=None, embedding_dim=None)`
+      Defaults from config.DUCKDB_PATH / LANCEDB_PATH / EMBEDDING_DIM.
+      Use as `async with Store() as store: ...`; or call `await
+      store.open()` / `await store.close()` explicitly.
+  - `async write(accepted: AcceptedExample, taxonomy_node: dict[str, str])`
+      Inserts one row in DuckDB and one record in LanceDB. The
+      `taxonomy_node` dict MUST include a `"domain"` key (orchestrator
+      composes it from NodeSet.domain + NodeSet.dimensions). Raises
+      `ValueError` on embedding-dim mismatch.
+  - `async nearest_similarity(embedding: list[float]) -> float`
+      Returns 0.0 on empty store; otherwise `1/(1+distance)` for the
+      closest vector — monotonic proxy in (0, 1] for threshold checks.
+      Raises ValueError on dim mismatch.
+  - `async count(domain: str | None = None) -> int`
+  - `async coverage(domain: str, dimension: str) -> dict[str, int]`
+      {taxonomy_value: count} via DuckDB json_extract — for the
+      coverage checker / orchestrator's gap analysis.
+  - `async all_embeddings(domain: str | None = None) -> list[list[float]]`
+      For the Vendi Score diversity tracker — not the dedup hot path.
+DuckDB schema (table `examples`): id, domain, instruction, response,
+  composite_score, verdict, rubric_json, taxonomy_node_json,
+  generator_model, generator_key, prefilter_key, prefilter_score, timestamp.
+LanceDB schema (table `examples`): id, domain, vector(fixed-size float32[dim]),
+  composite_score. Minimal — rich metadata lives in DuckDB.
+Side effects:
+  - Creates `config.DUCKDB_PATH.parent` and `config.LANCEDB_PATH` directories.
+  - Writes log lines to logger `sdf.store`.
+Config touched: EMBEDDING_DIM=1024, LANCE_TABLE_NAME="examples" (Session 8).
+LanceDB API note: `list_tables()` may return either a plain list (~0.13)
+  or a `ListTablesResponse(tables=...)` object (>=0.33). _open_sync handles
+  both forms; revisit if pinning newer versions.
+
+---
+
