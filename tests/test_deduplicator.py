@@ -42,29 +42,25 @@ def _judged(example_id: str, prompt: str, completion: str) -> JudgedExample:
     )
 
 
-class _FakeEmbeddings:
+class _FakeEmbedder:
+    """Stand-in for a sentence-transformers SentenceTransformer instance."""
+
     def __init__(self, vector_for):
-        # vector_for is a callable: text -> list[float]
         self._vector_for = vector_for
         self.calls = 0
 
-    async def create(self, *, model: str, input):
+    def encode(self, text: str, convert_to_numpy: bool = True):
         self.calls += 1
-        text = input if isinstance(input, str) else input[0]
-        return SimpleNamespace(data=[SimpleNamespace(embedding=self._vector_for(text))])
-
-
-class _FakeClient:
-    def __init__(self, vector_for):
-        self.embeddings = _FakeEmbeddings(vector_for)
+        # vector_for returns a list[float]; the real .encode returns a
+        # numpy array but tolerant code only iterates the rows.
+        return self._vector_for(text)
 
 
 def _patch_embed(monkeypatch, vector_for):
-    fake = _FakeClient(vector_for)
-    monkeypatch.setattr(dd, "_make_client", lambda _ak: fake)
-    async def _no_sleep(_d: float) -> None:
-        return None
-    monkeypatch.setattr("utils.asyncio.sleep", _no_sleep)
+    fake = _FakeEmbedder(vector_for)
+    # Replace the module-level factory so any Deduplicator built in the
+    # test uses our fake on its first embed() call.
+    monkeypatch.setattr(dd, "_make_embedder", lambda _name: fake)
     return fake
 
 

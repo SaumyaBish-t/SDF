@@ -2,6 +2,6 @@
   "topic": ["billing_dispute", "account_access", "product_defect", "refund_request", "shipping_delay"],
   "tone": ["polite", "frustrated", "confused", "urgent"],
   "complexity": ["simple_lookup", "multi_step", "edge_case"],
-  "language": ["english", "hinglish", "formal_hindi"],
+  "language": ["english"],
   "channel": ["chat", "email", "whatsapp"]
 }

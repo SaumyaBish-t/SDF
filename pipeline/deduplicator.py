@@ -4,9 +4,14 @@ Layer 1 — MinHash LSH with 5-grams, num_perm=128, Jaccard threshold 0.7
   (FineWeb-Edu settings per PROJECT_SPEC §7). Fast in-memory check that
   catches near-verbatim near-duplicates before we spend an embedding call.
 
-Layer 2 — embed via nv-embedcode-7b-v1 (free NIM endpoint), query
-  LanceDB for the nearest stored vector. Reject if similarity ≥
+Layer 2 — embed via local sentence-transformers (all-MiniLM-L6-v2),
+  query LanceDB for the nearest stored vector. Reject if similarity ≥
   config.SIMILARITY_REJECT (0.92).
+
+  Was originally NIM nv-embedcode-7b-v1 (~2s API round-trip × 100 calls
+  per run). Switched to local — first call eats ~3s model-load latency,
+  subsequent ones are ~50ms on CPU. Net: ~3 min saved per 100-accept
+  run AND one less external dependency.
 
 Survivors are returned as AcceptedExample(embedding=..., minhash_signature=...).
 The caller (orchestrator / writer) is responsible for persisting them.
@@ -21,22 +26,27 @@ import logging
 from typing import Optional
 
 from datasketch import MinHash, MinHashLSH
-from openai import AsyncOpenAI
 
 import config
 from models import AcceptedExample, JudgedExample
 from storage.store import Store
-from utils import with_retry
 
 
 _log = logging.getLogger("sdf.dedup")
 
 
 # ---------------------------------------------------------------------------
-# Client factory (test seam)
+# Local embedder loader (test seam — monkeypatch this in tests)
 # ---------------------------------------------------------------------------
-def _make_client(api_key: str) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=config.NIM_BASE_URL, api_key=api_key)
+def _make_embedder(model_name: str):
+    """Lazily import sentence-transformers and load the model.
+
+    Defined as a module-level function (not a method) so tests can
+    `monkeypatch.setattr(dd, "_make_embedder", ...)` and inject a fake
+    without pulling the real ~80MB model.
+    """
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+    return SentenceTransformer(model_name)
 
 
 # ---------------------------------------------------------------------------
@@ -84,34 +94,35 @@ class Deduplicator:
         minhash_threshold: float = config.MINHASH_THRESHOLD,
         similarity_reject: float = config.SIMILARITY_REJECT,
         embed_model: str = config.EMBED_MODEL,
-        embed_api_key: Optional[str] = None,
     ):
         self._store = store
         self._num_perm = num_perm
         self._ngram_size = ngram_size
         self._similarity_reject = similarity_reject
         self._embed_model = embed_model
-        self._embed_api_key = embed_api_key or config.EMBED_API_KEY_ROLE.api_key
         self._lsh = MinHashLSH(threshold=minhash_threshold, num_perm=num_perm)
+        # Lazy-loaded on first embed() call so __init__ stays IO-free —
+        # also lets tests construct a Deduplicator without paying the
+        # sentence-transformers model-load cost.
+        self._embedder = None
         # Stats — useful for the orchestrator to log dup-rate per run.
         self.minhash_rejects = 0
         self.cosine_rejects = 0
         self.accepted = 0
 
     # -- embedding ----------------------------------------------------------
-    async def _embed_raw(self, client: AsyncOpenAI, text: str) -> list[float]:
-        response = await client.embeddings.create(
-            model=self._embed_model,
-            input=text,
-        )
-        return list(response.data[0].embedding)
+    def _embed_sync(self, text: str) -> list[float]:
+        """Run the local SentenceTransformer encode. Called via to_thread
+        so the orchestrator event loop isn't blocked on CPU work."""
+        if self._embedder is None:
+            self._embedder = _make_embedder(self._embed_model)
+        vec = self._embedder.encode(text, convert_to_numpy=True)
+        return [float(x) for x in vec]
 
     async def embed(self, text: str) -> list[float]:
-        """One embedding call, wrapped in `utils.with_retry`."""
-        client = _make_client(self._embed_api_key)
-        return await with_retry(
-            self._embed_raw, client, text, _op_name="dedup.embed"
-        )
+        """One embedding via local sentence-transformers. CPU-bound, so
+        offloaded to a thread to keep the event loop responsive."""
+        return await asyncio.to_thread(self._embed_sync, text)
 
     # -- LSH ----------------------------------------------------------------
     def _is_minhash_duplicate(self, m: MinHash) -> bool:

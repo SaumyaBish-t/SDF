@@ -140,6 +140,51 @@ def test_parse_returns_empty_when_top_level_not_object() -> None:
     assert cs.parse_rubric("[1,2,3]") == {}
 
 
+def test_parse_prefers_last_json_block_for_reasoning_models() -> None:
+    """Reasoning models emit thinking JSON then a final answer JSON — pick the last."""
+    payload = (
+        "Let me think... {\"draft\": 1, \"placeholder\": true}\n"
+        "After careful analysis, my final rubric is:\n"
+        "{\"factuality\": 4, \"instruction_clarity\": 5, "
+        "\"response_quality\": 4, \"domain_relevance\": 5, "
+        "\"format_compliance\": 5}"
+    )
+    parsed = cs.parse_rubric(payload)
+    assert parsed == {
+        "factuality": 4,
+        "instruction_clarity": 5,
+        "response_quality": 4,
+        "domain_relevance": 5,
+        "format_compliance": 5,
+    }
+
+
+def test_parse_handles_nested_braces_in_reasoning_trace() -> None:
+    """A CoT trace with its own `{...}` snippets must not poison the parser."""
+    payload = (
+        "Reasoning: { \"step\": { \"observation\": \"weak factuality\" } }\n"
+        "Final: {\"factuality\": 2}"
+    )
+    parsed = cs.parse_rubric(payload)
+    assert parsed == {"factuality": 2}
+
+
+def test_parse_skips_blocks_with_no_rubric_dims_and_keeps_searching() -> None:
+    """A trailing block without rubric keys shouldn't shadow an earlier valid one."""
+    payload = (
+        '{"factuality": 3, "instruction_clarity": 4}\n'
+        "And here is some metadata:\n"
+        '{"author": "model", "ts": "2026-01-01"}'
+    )
+    parsed = cs.parse_rubric(payload)
+    assert parsed == {"factuality": 3, "instruction_clarity": 4}
+
+
+def test_find_balanced_objects_returns_outermost_blocks() -> None:
+    blocks = cs._find_balanced_objects('prefix {"a": 1} mid {"b": {"c": 2}} tail')
+    assert blocks == ['{"a": 1}', '{"b": {"c": 2}}']
+
+
 # ---------------------------------------------------------------------------
 # composite_score
 # ---------------------------------------------------------------------------

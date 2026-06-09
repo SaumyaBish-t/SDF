@@ -71,8 +71,16 @@ async def test_with_retry_passes_args_and_kwargs() -> None:
 
 
 def test_setup_logging_is_idempotent() -> None:
-    logger1 = utils.setup_logging()
-    logger2 = utils.setup_logging()
+    # Reset the module-level guard + drop any handlers a prior test
+    # installed on the global "sdf" logger, so we can verify idempotency
+    # from a clean slate.
+    logger = logging.getLogger("sdf")
+    for h in list(logger.handlers):
+        logger.removeHandler(h)
+    utils._logger_initialized = False  # noqa: SLF001 — test access
+
+    logger1 = utils.setup_logging(console=False)
+    logger2 = utils.setup_logging(console=False)
     assert logger1 is logger2
     # Single file handler, not duplicated by repeat calls.
     handlers = [h for h in logger1.handlers if isinstance(h, logging.Handler)]
@@ -87,3 +95,52 @@ def test_setup_logging_writes_to_log_file() -> None:
     assert config.LOG_FILE.exists()
     content = config.LOG_FILE.read_text(encoding="utf-8")
     assert "test-marker-for-pytest" in content
+
+
+# ---------------------------------------------------------------------------
+# extract_chat_content — defensive guards around NIM choice quirks
+# ---------------------------------------------------------------------------
+class _Resp:
+    def __init__(self, choices):
+        self.choices = choices
+
+
+class _Choice:
+    def __init__(self, message):
+        self.message = message
+
+
+class _Msg:
+    def __init__(self, content):
+        self.content = content
+
+
+def test_extract_chat_content_happy_path() -> None:
+    r = _Resp([_Choice(_Msg("hello"))])
+    assert utils.extract_chat_content(r) == "hello"
+
+
+def test_extract_chat_content_handles_none_choices() -> None:
+    r = _Resp(None)
+    assert utils.extract_chat_content(r) == ""
+
+
+def test_extract_chat_content_handles_empty_choices() -> None:
+    r = _Resp([])
+    assert utils.extract_chat_content(r) == ""
+
+
+def test_extract_chat_content_handles_missing_message() -> None:
+    r = _Resp([_Choice(None)])
+    assert utils.extract_chat_content(r) == ""
+
+
+def test_extract_chat_content_handles_none_content() -> None:
+    r = _Resp([_Choice(_Msg(None))])
+    assert utils.extract_chat_content(r) == ""
+
+
+def test_extract_chat_content_handles_missing_choices_attr() -> None:
+    class _Bare:
+        pass
+    assert utils.extract_chat_content(_Bare()) == ""

@@ -21,7 +21,7 @@ from openai import AsyncOpenAI
 import config
 from models import RawExample, ScoredExample
 from pipeline.generator import parse_json_array  # shared tolerant parser
-from utils import with_retry
+from utils import extract_chat_content, with_retry
 
 
 _log = logging.getLogger("sdf.critic.prefilter")
@@ -112,7 +112,7 @@ async def _raw_completion(
         temperature=temperature,
         max_tokens=config.PREFILTER_MAX_TOKENS,
     )
-    return response.choices[0].message.content or ""
+    return extract_chat_content(response)
 
 
 async def prefilter_batch(

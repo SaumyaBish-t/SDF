@@ -240,6 +240,7 @@ async def _dedup_writer_worker(
     store: Store,
     state: _RunState,
     n_scorer_workers: int,
+    nodes_by_id: dict[str, NodeSet],
 ) -> None:
     """Single consumer — dedup, persist, write JSONL, checkpoint, stop on target.
 
@@ -254,6 +255,15 @@ async def _dedup_writer_worker(
                 if sentinels_seen >= n_scorer_workers:
                     _log.info("dedup/writer drained all upstream sentinels — exiting")
                     return
+                continue
+
+            # Once target is reached, discard anything still in flight
+            # rather than embed + persist + write JSONL for examples we
+            # don't need. Saves API calls + disk during the shutdown
+            # drain (we used to overshoot by 10+ during the wind-down).
+            if state.stop_event.is_set():
+                async with state.lock:
+                    state.rejected_count += 1
                 continue
 
             judged: JudgedExample = item
@@ -281,7 +291,14 @@ async def _dedup_writer_worker(
             # minimal dict from what we have. PROJECT_SPEC writer schema only
             # requires {"domain": ...}; downstream tooling can join on node_id.
             raw = judged.scored.raw
+            # Hydrate the taxonomy_node from the NodeSet lookup table built
+            # at orchestrator startup. Without this the dimension values
+            # (topic, tone, language, ...) never reach DuckDB and the
+            # `coverage(domain, dimension)` query returns empty.
+            node_set = nodes_by_id.get(raw.node_id)
             taxonomy_node = {"domain": state.domain, "node_id": raw.node_id}
+            if node_set is not None:
+                taxonomy_node.update(node_set.dimensions)
 
             try:
                 await store.write(accepted, taxonomy_node=taxonomy_node)
@@ -316,7 +333,10 @@ async def _dedup_writer_worker(
             if count % config.CHECKPOINT_INTERVAL == 0:
                 await _save_checkpoint(state, count, last_idx, store=store)
 
-            if count >= state.target:
+            if count >= state.target and not state.stop_event.is_set():
+                # Set-and-log exactly once. Without the guard, every accept
+                # past the threshold re-fires the log line and re-sets the
+                # already-set event.
                 _log.info("target %d reached — signalling shutdown", state.target)
                 state.stop_event.set()
         finally:
@@ -326,6 +346,36 @@ async def _dedup_writer_worker(
 # ---------------------------------------------------------------------------
 # Checkpointing
 # ---------------------------------------------------------------------------
+async def _heartbeat(
+    state: _RunState,
+    raw_queue: asyncio.Queue,
+    scored_queue: asyncio.Queue,
+    accepted_queue: asyncio.Queue,
+    interval_s: float = 30.0,
+) -> None:
+    """Every interval, log queue depths + counters so the user can see
+    which stage is the bottleneck instead of staring at a silent terminal.
+
+    Exits cleanly when `stop_event` is set.
+    """
+    while not state.stop_event.is_set():
+        try:
+            await asyncio.wait_for(state.stop_event.wait(), timeout=interval_s)
+            return  # stop_event fired during the wait
+        except asyncio.TimeoutError:
+            pass
+        async with state.lock:
+            accepted = state.accepted_count
+            rejected = state.rejected_count
+            last_idx = state.last_node_idx
+        _log.info(
+            "heartbeat: accepted=%d/%d rejected=%d last_node_idx=%d "
+            "queues[raw=%d scored=%d accepted=%d]",
+            accepted, state.target, rejected, last_idx,
+            raw_queue.qsize(), scored_queue.qsize(), accepted_queue.qsize(),
+        )
+
+
 async def _save_checkpoint(
     state: _RunState,
     accepted: int,
@@ -418,6 +468,12 @@ async def run(
         start_idx = 0
         initial_accepted = 0
         initial_rejected = 0
+        _log.info(
+            "starting run_id=%s domain=%s target=%d node_sets=%d "
+            "(workers: gen=%d prefilter=%d scorer=%d dedup=1)",
+            run_id, domain, target, len(node_sets),
+            len(config.GENERATOR_KEYS), n_prefilter_workers, n_scorer_workers,
+        )
 
     if output_path is None:
         output_path = config.OUTPUT_DIR / f"{run_id}.jsonl"
@@ -491,6 +547,15 @@ async def run(
             for i in range(n_scorer_workers)
         ]
 
+        # Lookup so the dedup/writer can hydrate the persisted taxonomy_node
+        # with the NodeSet's actual dimension values (topic, tone, ...).
+        nodes_by_id = {ns.node_id: ns for ns in node_sets}
+
+        heartbeat_task = asyncio.create_task(
+            _heartbeat(state, raw_queue, scored_queue, accepted_queue),
+            name="sdf.heartbeat",
+        )
+
         writer_task = asyncio.create_task(
             _dedup_writer_worker(
                 accepted_queue=accepted_queue,
@@ -498,6 +563,7 @@ async def run(
                 store=store,
                 state=state,
                 n_scorer_workers=n_scorer_workers,
+                nodes_by_id=nodes_by_id,
             ),
             name="sdf.dedup_writer",
         )
@@ -516,6 +582,11 @@ async def run(
         await asyncio.gather(*scorer_tasks, return_exceptions=True)
         # Each scorer emits one sentinel; writer counts them. Just await.
         await writer_task
+        # stop_event was set when target hit (or run ended) — heartbeat will
+        # observe it next tick and exit on its own; ensure it's awaited so we
+        # don't leak a pending task.
+        state.stop_event.set()
+        await heartbeat_task
 
         # ---- final checkpoint ---------------------------------------------
         await _save_checkpoint(

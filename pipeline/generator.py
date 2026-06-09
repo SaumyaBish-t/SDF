@@ -22,7 +22,7 @@ from openai import AsyncOpenAI
 
 import config
 from models import NodeSet, RawExample
-from utils import with_retry
+from utils import extract_chat_content, with_retry
 
 
 _log = logging.getLogger("sdf.generator")
@@ -114,7 +114,7 @@ async def _raw_completion(client: AsyncOpenAI, model: str, prompt: str, temperat
         temperature=temperature,
         max_tokens=config.GEN_MAX_TOKENS,
     )
-    return response.choices[0].message.content or ""
+    return extract_chat_content(response)
 
 
 async def generate_batch(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 from typing import Any, Awaitable, Callable, TypeVar
 
@@ -19,12 +20,15 @@ _LOGGER_NAME = "sdf"
 _logger_initialized = False
 
 
-def setup_logging() -> logging.Logger:
-    """Configure the 'sdf' logger to write to config.LOG_FILE.
+def setup_logging(*, console: bool = True) -> logging.Logger:
+    """Configure the 'sdf' logger.
 
+    File handler (always): full log at config.LOG_LEVEL written to
+      config.LOG_FILE (rotating, 10MB × 5 backups, UTF-8).
+    Console handler (default on): INFO+ mirrored to stderr in a compact
+      one-line format so CLI users see live progress instead of staring
+      at a frozen prompt. Pass `console=False` for library/test use.
     Idempotent — calling multiple times does not duplicate handlers.
-    Pipeline modules call `setup_logging()` once at startup, then use
-    `logging.getLogger("sdf")` (or a child like "sdf.generator") elsewhere.
     """
     global _logger_initialized
     logger = logging.getLogger(_LOGGER_NAME)
@@ -32,22 +36,37 @@ def setup_logging() -> logging.Logger:
         return logger
 
     logger.setLevel(getattr(logging, config.LOG_LEVEL.upper(), logging.INFO))
-    logger.propagate = False  # don't leak to root → stdout
+    logger.propagate = False  # don't leak to root → duplicate output
 
     config.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    handler = RotatingFileHandler(
+    file_handler = RotatingFileHandler(
         config.LOG_FILE,
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8",
     )
-    handler.setFormatter(
+    file_handler.setFormatter(
         logging.Formatter(
             "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
     )
-    logger.addHandler(handler)
+    logger.addHandler(file_handler)
+
+    if console:
+        # Compact stderr stream: timestamp + level + short name + message.
+        # Goes to stderr so JSON-on-stdout from the CLI stays clean for
+        # pipes (`python cli.py status | jq ...`).
+        stream_handler = logging.StreamHandler(stream=sys.stderr)
+        stream_handler.setLevel(logging.INFO)
+        stream_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname).1s %(name)s | %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
+        logger.addHandler(stream_handler)
+
     _logger_initialized = True
     return logger
 
@@ -91,3 +110,26 @@ async def with_retry(
     # Unreachable — loop either returns or raises. Satisfies type checker.
     assert last_exc is not None
     raise last_exc
+
+
+def extract_chat_content(response: Any) -> str:
+    """Pull `choices[0].message.content` out of a chat-completion response.
+
+    NIM occasionally returns responses where `choices` is `None`, an empty
+    list, or where `message` is missing — the raw `response.choices[0]...`
+    indexing path then raises `'NoneType' object is not subscriptable` and
+    blows up under `with_retry`. This helper returns "" instead so the
+    caller can treat the empty response as "unparseable" via its own
+    fail-safe path, without burning retries on a structural quirk.
+
+    Used by generator + critic_prefilter + critic_scorer at their single
+    chat.completions.create() call sites.
+    """
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        return ""
+    first = choices[0]
+    message = getattr(first, "message", None)
+    if message is None:
+        return ""
+    return getattr(message, "content", None) or ""

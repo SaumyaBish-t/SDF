@@ -59,7 +59,10 @@ KEY_1: Final[KeyRole] = KeyRole(
 KEY_2: Final[KeyRole] = KeyRole(
     name="generator",
     api_key=_require_env("NIM_KEY_2"),
-    model="z-ai/glm4.7",
+    # Was "z-ai/glm4.7" — retired by NIM on 2026-05-14. Mirroring KEY_1's
+    # model lets the second key stay in rotation; semaphores are per-key
+    # so total in-flight stays at 20 generator requests.
+    model="deepseek-ai/deepseek-v4-flash",
     batch_size=10,
 )
 
@@ -67,21 +70,32 @@ KEY_3: Final[KeyRole] = KeyRole(
     name="pre_filter",
     api_key=_require_env("NIM_KEY_3"),
     model="nvidia/nemotron-3-nano-30b-a3b",
-    batch_size=3,
+    # Bumped 3 → 8: observed ~0.4 RPM on this key in practice, nowhere
+    # near the 40 RPM cap. More in-flight requests drain raw_queue faster.
+    # Backoff handles any 429 if NIM pushes back.
+    batch_size=8,
 )
 
 KEY_4: Final[KeyRole] = KeyRole(
     name="pre_filter",
     api_key=_require_env("NIM_KEY_4"),
     model="mistralai/mistral-small-4-119b-2603",
-    batch_size=3,
+    batch_size=8,
 )
 
 KEY_5: Final[KeyRole] = KeyRole(
     name="full_scorer",
     api_key=_require_env("NIM_KEY_5"),
-    model="deepseek-ai/deepseek-r1-0528",
-    batch_size=1,
+    # nano-8b was fast but sycophantic — every example came back 5/5/5/5/5,
+    # so the rubric did no work. Llama-3.3-70b-instruct is the calibration
+    # sweet spot: large enough to actually discriminate, instruction-tuned
+    # (no reasoning preamble), mainline on NIM. NIM free-tier rate-limit
+    # is the wall-clock floor anyway, so the per-call slowdown is hidden.
+    model="meta/llama-3.3-70b-instruct",
+    # Bumped 3 → 6. The embedder used to share this key — now that local
+    # sentence-transformers handles dedup vectors, KEY_5's full budget
+    # goes to scoring; raise concurrency to use it.
+    batch_size=6,
 )
 
 GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_1, KEY_2)
@@ -92,7 +106,7 @@ FULL_SCORER_KEY: Final[KeyRole] = KEY_5
 # Keyed by KeyRole.model string so generator.py needs no model-name conditionals.
 GEN_TEMPERATURE: Final[dict[str, float]] = {
     KEY_1.model: 0.9,
-    KEY_2.model: 0.85,
+    KEY_2.model: 0.85,  # if KEY_1 and KEY_2 share a model, last write wins
 }
 GEN_MAX_TOKENS: Final[int] = 4096
 GEN_DEFAULT_BATCH_SIZE: Final[int] = 10  # examples per generator call
@@ -121,12 +135,17 @@ RUBRIC_SCORE_MIN: Final[int] = 1
 RUBRIC_SCORE_MAX: Final[int] = 5
 
 # Storage (PROJECT_SPEC.md §8).
-EMBEDDING_DIM: Final[int] = 1024  # nv-embedcode-7b-v1
+# Moved from NIM nv-embedcode-7b-v1 (4096 dim, ~2s API round-trip) to
+# local sentence-transformers all-MiniLM-L6-v2 (384 dim, ~50ms CPU). Kills
+# ~100 slow API calls per 100-accept run and frees KEY_5 to focus on the
+# scorer. Bumping this requires wiping the existing LanceDB table since
+# the vector column is a fixed-size list.
+EMBEDDING_DIM: Final[int] = 384
 LANCE_TABLE_NAME: Final[str] = "examples"
 
-# Embedding endpoint (PROJECT_SPEC §7, free NIM model).
-EMBED_MODEL: Final[str] = "nvidia/nv-embedcode-7b-v1"
-EMBED_API_KEY_ROLE: Final[KeyRole] = KEY_5  # any valid NIM key works; reuse scorer's
+# Local embedding model — sentence-transformers loads it from HuggingFace
+# the first time and caches under ~/.cache/huggingface. ~80MB download.
+EMBED_MODEL: Final[str] = "sentence-transformers/all-MiniLM-L6-v2"
 
 # Dedup — MinHash LSH layer (PROJECT_SPEC §7).
 MINHASH_NUM_PERM: Final[int] = 128

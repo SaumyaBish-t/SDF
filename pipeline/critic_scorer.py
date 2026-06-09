@@ -21,7 +21,7 @@ from openai import AsyncOpenAI
 
 import config
 from models import JudgedExample, ScoredExample
-from utils import with_retry
+from utils import extract_chat_content, with_retry
 
 
 _log = logging.getLogger("sdf.critic.scorer")
@@ -40,8 +40,34 @@ def _make_client(api_key: str) -> AsyncOpenAI:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
-_OBJECT_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
 _FENCE_RE = re.compile(r"```(?:json)?", re.IGNORECASE)
+# kept for backward-compatible imports; balanced-brace scanner is preferred.
+_OBJECT_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
+
+
+def _find_balanced_objects(text: str) -> list[str]:
+    """Return every balanced `{...}` substring, outermost-first by start pos.
+
+    A naive regex breaks on nested braces (e.g. a CoT reasoning trace that
+    contains its own JSON snippet). Reasoning models like nemotron-super
+    routinely emit multiple `{...}` blocks; we want them all so the
+    caller can try parsing each.
+    """
+    out: list[str] = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    out.append(text[start : i + 1])
+                    start = -1
+    return out
 
 
 def build_scorer_prompt(scored: ScoredExample, domain: str) -> str:
@@ -77,36 +103,48 @@ def parse_rubric(text: str) -> dict[str, int]:
         return {}
     cleaned = _FENCE_RE.sub("", text).strip()
 
-    parsed: Optional[dict] = None
+    # Strategy:
+    #   1. Try the whole stripped string as JSON — happy path for clean models.
+    #   2. Otherwise scan every balanced `{...}` block and try them
+    #      *last-to-first*. Reasoning models (nemotron-super, DeepSeek R1)
+    #      typically emit their final answer JSON at the end of the
+    #      response, after CoT prose that may itself contain bracket
+    #      noise. The last block that parses AND yields at least one
+    #      rubric dimension wins.
+    candidates: list[dict] = []
     try:
-        candidate = json.loads(cleaned)
-        if isinstance(candidate, dict):
-            parsed = candidate
+        whole = json.loads(cleaned)
+        if isinstance(whole, dict):
+            candidates.append(whole)
     except json.JSONDecodeError:
-        match = _OBJECT_RE.search(cleaned)
-        if match:
-            try:
-                candidate = json.loads(match.group())
-                if isinstance(candidate, dict):
-                    parsed = candidate
-            except json.JSONDecodeError:
-                pass
+        pass
 
-    if parsed is None:
-        return {}
+    for block in reversed(_find_balanced_objects(cleaned)):
+        try:
+            obj = json.loads(block)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            candidates.append(obj)
 
-    out: dict[str, int] = {}
-    for dim in config.RUBRIC_DIMENSIONS:
-        if dim not in parsed:
-            continue
-        val = parsed[dim]
-        if isinstance(val, bool):  # bool is subclass of int — exclude
-            continue
-        if not isinstance(val, (int, float)):
-            continue
-        clamped = max(config.RUBRIC_SCORE_MIN, min(config.RUBRIC_SCORE_MAX, int(round(val))))
-        out[dim] = clamped
-    return out
+    for parsed in candidates:
+        out: dict[str, int] = {}
+        for dim in config.RUBRIC_DIMENSIONS:
+            if dim not in parsed:
+                continue
+            val = parsed[dim]
+            if isinstance(val, bool):  # bool is subclass of int — exclude
+                continue
+            if not isinstance(val, (int, float)):
+                continue
+            clamped = max(
+                config.RUBRIC_SCORE_MIN,
+                min(config.RUBRIC_SCORE_MAX, int(round(val))),
+            )
+            out[dim] = clamped
+        if out:
+            return out
+    return {}
 
 
 def composite_score(rubric: dict[str, int]) -> float:
@@ -136,7 +174,7 @@ async def _raw_completion(
         temperature=temperature,
         max_tokens=config.FULL_SCORER_MAX_TOKENS,
     )
-    return response.choices[0].message.content or ""
+    return extract_chat_content(response)
 
 
 async def full_score(scored: ScoredExample, domain: str) -> JudgedExample:
@@ -161,9 +199,13 @@ async def full_score(scored: ScoredExample, domain: str) -> JudgedExample:
 
     rubric = parse_rubric(text)
     if not rubric:
+        # Log the raw output (truncated) so we can diagnose drift in the
+        # model's emitted format and harden parse_rubric accordingly.
+        snippet = (text or "")[:800].replace("\n", "\\n")
         _log.warning(
-            "scorer returned no parseable rubric (example_id=%s) — rejecting",
-            scored.raw.example_id,
+            "scorer returned no parseable rubric (example_id=%s) — rejecting. "
+            "RAW[0:800]=%s",
+            scored.raw.example_id, snippet,
         )
         return JudgedExample(
             scored=scored, full_score=0.0, rubric={}, verdict="reject",

@@ -20,6 +20,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 
+# Windows: switch off the default ProactorEventLoop. It races on shutdown
+# with long-running HTTPS sockets opened by httpx/openai and surfaces as
+# `InvalidStateError: invalid state` during teardown. SelectorEventLoop
+# has none of those races for this workload (no subprocess pipes here).
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
 # ---------------------------------------------------------------------------
 # Output helpers — emit JSON to stdout so the CLI is scriptable.
 # ---------------------------------------------------------------------------
@@ -145,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Initialise the sdf logger so pipeline INFOs land on stderr live.
+    # Stdout stays reserved for the JSON payload each subcommand emits.
+    from utils import setup_logging
+    setup_logging(console=args.command == "run")
+
     handler = args.handler
     if args.is_async:
         return asyncio.run(handler(args))
