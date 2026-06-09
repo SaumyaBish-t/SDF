@@ -22,6 +22,11 @@ data/
 # Copy providers.json.example -> providers.json and fill in.
 providers.json
 
+# Local LiteLLM proxy config — personal/dev workaround for routing
+# to Bedrock when you don't have a paid OpenAI-compatible key.
+# Not part of the production architecture; production is pure BYOK.
+litellm_config.yaml
+
 .ipynb_checkpoints/
 .pytest_cache/
 .mypy_cache/
