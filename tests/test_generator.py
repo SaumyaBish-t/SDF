@@ -67,9 +67,10 @@ def test_meta_prompt_includes_batch_size_domain_and_dimensions() -> None:
 # round_robin_keys
 # ---------------------------------------------------------------------------
 def test_round_robin_keys_cycles_generator_keys() -> None:
+    pool = list(config.GENERATOR_KEYS)
     cyc = generator.round_robin_keys()
-    first_four = list(islice(cyc, 4))
-    assert first_four == [config.KEY_1, config.KEY_2, config.KEY_1, config.KEY_2]
+    seen = list(islice(cyc, len(pool) * 2))
+    assert seen == pool * 2
 
 
 # ---------------------------------------------------------------------------
@@ -121,11 +122,12 @@ async def test_generate_batch_returns_typed_examples(monkeypatch) -> None:
     ])
     _install_fake_client(monkeypatch, payload)
 
-    examples = await generator.generate_batch(_ns(), key=config.KEY_1, batch_size=2)
+    gen_key = config.GENERATOR_KEYS[0]
+    examples = await generator.generate_batch(_ns(), key=gen_key, batch_size=2)
     assert len(examples) == 2
     assert examples[0].prompt == "Q1?" and examples[0].completion == "A1."
-    assert examples[0].generator_model == config.KEY_1.model
-    assert examples[0].generator_key == "KEY_1"
+    assert examples[0].generator_model == gen_key.model
+    assert examples[0].generator_key == "GEN_0"
     assert examples[0].node_id == "cs-000001"
     assert examples[0].example_id.startswith("cs-000001-")
     # example_ids must be unique within a batch.
@@ -141,10 +143,11 @@ async def test_generate_batch_skips_items_missing_required_fields(monkeypatch) -
         {"instruction": "no response"},
     ])
     _install_fake_client(monkeypatch, payload)
-    examples = await generator.generate_batch(_ns(), key=config.KEY_2)
+    gen_key = config.GENERATOR_KEYS[0]
+    examples = await generator.generate_batch(_ns(), key=gen_key)
     assert len(examples) == 1
-    assert examples[0].generator_key == "KEY_2"
-    assert examples[0].generator_model == config.KEY_2.model
+    assert examples[0].generator_key == "GEN_0"
+    assert examples[0].generator_model == gen_key.model
 
 
 @pytest.mark.asyncio
@@ -164,8 +167,8 @@ async def test_generate_batch_returns_empty_on_unparseable_output(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_generate_batch_defaults_to_key_1(monkeypatch) -> None:
+async def test_generate_batch_defaults_to_first_pool_key(monkeypatch) -> None:
     payload = json.dumps([{"instruction": "i", "response": "r"}])
     _install_fake_client(monkeypatch, payload)
     examples = await generator.generate_batch(_ns())
-    assert examples[0].generator_key == "KEY_1"
+    assert examples[0].generator_model == config.GENERATOR_KEYS[0].model

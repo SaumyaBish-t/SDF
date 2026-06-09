@@ -16,7 +16,7 @@ import logging
 import re
 import uuid
 from itertools import cycle
-from typing import Iterator, Literal, Optional
+from typing import Iterator, Optional
 
 from openai import AsyncOpenAI
 
@@ -35,17 +35,18 @@ _SEMAPHORES: dict[config.KeyRole, asyncio.Semaphore] = {
     k: asyncio.Semaphore(k.batch_size) for k in config.GENERATOR_KEYS
 }
 
-_KEY_NAME: dict[config.KeyRole, Literal["KEY_1", "KEY_2"]] = {
-    config.KEY_1: "KEY_1",
-    config.KEY_2: "KEY_2",
+_KEY_NAME: dict[config.KeyRole, str] = {
+    k: f"GEN_{i}" for i, k in enumerate(config.GENERATOR_KEYS)
 }
 
 
 # ---------------------------------------------------------------------------
 # Client factory (single seam for monkeypatching in tests)
 # ---------------------------------------------------------------------------
-def _make_client(api_key: str) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=config.NIM_BASE_URL, api_key=api_key)
+def _make_client(key: config.KeyRole) -> AsyncOpenAI:
+    # 60s timeout — without this a hung TCP connection blocks the worker
+    # forever instead of erroring into with_retry's backoff loop.
+    return AsyncOpenAI(base_url=key.base_url, api_key=key.api_key, timeout=60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -131,16 +132,16 @@ async def generate_batch(
 
     Empty list is returned if the model output is unparseable after retries.
     """
-    selected = key if key is not None else config.KEY_1
+    selected = key if key is not None else config.GENERATOR_KEYS[0]
     bs = batch_size if batch_size is not None else config.GEN_DEFAULT_BATCH_SIZE
     if selected.model not in config.GEN_TEMPERATURE:
         raise ValueError(f"No temperature configured for generator model {selected.model!r}")
     temperature = config.GEN_TEMPERATURE[selected.model]
 
     prompt = build_meta_prompt(node_set, bs)
-    client = _make_client(selected.api_key)
-    sem = _SEMAPHORES[selected]
-    key_label = _KEY_NAME[selected]
+    client = _make_client(selected)
+    sem = _SEMAPHORES.setdefault(selected, asyncio.Semaphore(selected.batch_size))
+    key_label = _KEY_NAME.get(selected, f"GEN:{selected.model}")
 
     async with sem:
         text = await with_retry(

@@ -26,15 +26,19 @@ from utils import extract_chat_content, with_retry
 
 _log = logging.getLogger("sdf.critic.scorer")
 
+# Default scorer key (server-side config). Per-call `key=` argument overrides.
 _KEY = config.FULL_SCORER_KEY
-_SEMAPHORE = asyncio.Semaphore(_KEY.batch_size)
+# Per-key semaphores so concurrent BYOK runs don't share each other's limits.
+_SEMAPHORES: dict[config.KeyRole, asyncio.Semaphore] = {
+    _KEY: asyncio.Semaphore(_KEY.batch_size),
+}
 
 
 # ---------------------------------------------------------------------------
 # Client factory (test seam)
 # ---------------------------------------------------------------------------
-def _make_client(api_key: str) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=config.NIM_BASE_URL, api_key=api_key)
+def _make_client(key: config.KeyRole) -> AsyncOpenAI:
+    return AsyncOpenAI(base_url=key.base_url, api_key=key.api_key, timeout=60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -177,24 +181,37 @@ async def _raw_completion(
     return extract_chat_content(response)
 
 
-async def full_score(scored: ScoredExample, domain: str) -> JudgedExample:
+async def full_score(
+    scored: ScoredExample,
+    domain: str,
+    key: Optional[config.KeyRole] = None,
+) -> JudgedExample:
     """Score one ScoredExample, returning the verdict-bearing JudgedExample.
+
+    Args:
+        key: per-call override for the scorer KeyRole (BYOK path). Defaults
+            to the server-side `config.FULL_SCORER_KEY`.
 
     Wraps the API call in `utils.with_retry`. On total parse failure after
     retries, returns a JudgedExample with full_score=0.0, empty rubric, and
     verdict='reject' — i.e. unscorable == rejected.
     """
-    client = _make_client(_KEY.api_key)
-    prompt = build_scorer_prompt(scored, domain)
+    selected = key if key is not None else _KEY
+    if selected.name != "full_scorer":
+        raise ValueError(f"{selected} is not a full-scorer key")
 
-    async with _SEMAPHORE:
+    client = _make_client(selected)
+    prompt = build_scorer_prompt(scored, domain)
+    sem = _SEMAPHORES.setdefault(selected, asyncio.Semaphore(selected.batch_size))
+
+    async with sem:
         text = await with_retry(
             _raw_completion,
             client,
-            _KEY.model,
+            selected.model,
             prompt,
             config.FULL_SCORER_TEMPERATURE,
-            _op_name="scorer.KEY_5",
+            _op_name=f"scorer:{selected.model}",
         )
 
     rubric = parse_rubric(text)

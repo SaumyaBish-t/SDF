@@ -25,6 +25,10 @@ load_dotenv(_PROJECT_ROOT / ".env")
 NIM_BASE_URL: Final[str] = os.getenv(
     "NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"
 )
+BLUESMINDS_BASE_URL: Final[str] = "https://api.bluesminds.com/v1"
+BEDROCK_BASE_URL: Final[str] = os.getenv(
+    "BEDROCK_BASE_URL", "http://localhost:4000/v1"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -34,9 +38,49 @@ NIM_BASE_URL: Final[str] = os.getenv(
 @dataclass(frozen=True)
 class KeyRole:
     name: str           # logical role: generator | pre_filter | full_scorer
-    api_key: str        # value loaded from .env
-    model: str          # NIM model string
+    api_key: str        # value loaded from .env (or supplied per request via BYOK)
+    model: str          # provider model string
     batch_size: int     # concurrent requests per batch
+    base_url: str = NIM_BASE_URL  # OpenAI-compatible endpoint
+
+    def __repr__(self) -> str:  # noqa: D401 — short on purpose
+        # api_key is the only sensitive field; everything else is fine to log.
+        return (
+            f"KeyRole(name={self.name!r}, model={self.model!r}, "
+            f"base_url={self.base_url!r}, batch_size={self.batch_size}, "
+            f"api_key=***)"
+        )
+
+
+def keyroles_from_provider_config(providers) -> tuple["KeyRole", "KeyRole", "KeyRole"]:
+    """Build (generator, prefilter, scorer) KeyRoles from a `models.ProviderConfig`.
+
+    Lives here (not in `models.py`) so models.py stays free of config-layer
+    types. `providers` is typed as `Any` to keep this import cycle-free —
+    callers pass a `models.ProviderConfig` instance and we read its fields.
+    """
+    gen = KeyRole(
+        name="generator",
+        api_key=providers.generator.api_key.get_secret_value(),
+        model=providers.generator.model,
+        batch_size=providers.generator.batch_size,
+        base_url=providers.generator.base_url,
+    )
+    pre = KeyRole(
+        name="pre_filter",
+        api_key=providers.prefilter.api_key.get_secret_value(),
+        model=providers.prefilter.model,
+        batch_size=providers.prefilter.batch_size,
+        base_url=providers.prefilter.base_url,
+    )
+    scr = KeyRole(
+        name="full_scorer",
+        api_key=providers.scorer.api_key.get_secret_value(),
+        model=providers.scorer.model,
+        batch_size=providers.scorer.batch_size,
+        base_url=providers.scorer.base_url,
+    )
+    return gen, pre, scr
 
 
 def _require_env(var: str) -> str:
@@ -98,15 +142,82 @@ KEY_5: Final[KeyRole] = KeyRole(
     batch_size=6,
 )
 
-GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_1, KEY_2)
-PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (KEY_3, KEY_4)
-FULL_SCORER_KEY: Final[KeyRole] = KEY_5
+# ---------------------------------------------------------------------------
+# Bluesminds keys — kept defined for easy fallback, but BLUESMINDS_KEY is
+# now optional. If unset, the KEY_BM_* roles get a dummy key and any attempt
+# to actually use them would 401 — which is fine, they're not in the active
+# pools below.
+# ---------------------------------------------------------------------------
+_BM_KEY: Final[str] = os.getenv("BLUESMINDS_KEY", "unset")
+
+KEY_BM_GEN: Final[KeyRole] = KeyRole(
+    name="generator",
+    api_key=_BM_KEY,
+    model="DeepSeek-V4-Flash",   # $0.14 / $0.28 per M — same family as NIM gen
+    batch_size=5,
+    base_url=BLUESMINDS_BASE_URL,
+)
+
+KEY_BM_PREFILTER: Final[KeyRole] = KeyRole(
+    name="pre_filter",
+    api_key=_BM_KEY,
+    model="gpt-5-nano",           # $0.10 / $0.80 — cheapest input, tiny outputs
+    batch_size=8,
+    base_url=BLUESMINDS_BASE_URL,
+)
+
+KEY_BM_SCORER: Final[KeyRole] = KeyRole(
+    name="full_scorer",
+    api_key=_BM_KEY,
+    model="z-ai/glm-5.1",         # $0.60 / $0.18 — reasoning model, cheap output
+    batch_size=6,
+    base_url=BLUESMINDS_BASE_URL,
+)
+
+# ---------------------------------------------------------------------------
+# Bedrock keys (via LiteLLM proxy at http://localhost:4000/v1).
+# Model strings match the `model_name` entries in litellm_config.yaml.
+# Proxy doesn't require auth on localhost — pass a dummy api_key.
+# ---------------------------------------------------------------------------
+_BR_KEY: Final[str] = "litellm-local"  # proxy ignores this, but openai SDK requires non-empty
+
+KEY_BR_GEN: Final[KeyRole] = KeyRole(
+    name="generator",
+    api_key=_BR_KEY,
+    model="nova-lite",            # Bedrock amazon.nova-lite-v1:0 — $0.06 / $0.24 per M
+    batch_size=5,
+    base_url=BEDROCK_BASE_URL,
+)
+
+KEY_BR_PREFILTER: Final[KeyRole] = KeyRole(
+    name="pre_filter",
+    api_key=_BR_KEY,
+    model="nova-micro",           # Bedrock amazon.nova-micro-v1:0 — $0.035 / $0.14 per M
+    batch_size=8,
+    base_url=BEDROCK_BASE_URL,
+)
+
+KEY_BR_SCORER: Final[KeyRole] = KeyRole(
+    name="full_scorer",
+    api_key=_BR_KEY,
+    model="scorer",               # Bedrock meta.llama3-3-70b-instruct — $0.72 / $0.72 per M
+    batch_size=4,
+    base_url=BEDROCK_BASE_URL,
+)
+
+# Active pools — Bedrock via LiteLLM. Flip back by pointing these at
+# (KEY_BM_*,) for bluesminds or (KEY_1, KEY_2) / (KEY_3, KEY_4) / KEY_5 for NIM.
+GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_BR_GEN,)
+PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (KEY_BR_PREFILTER,)
+FULL_SCORER_KEY: Final[KeyRole] = KEY_BR_SCORER
 
 # Per-model sampling temperatures (PROJECT_SPEC.md §5).
 # Keyed by KeyRole.model string so generator.py needs no model-name conditionals.
 GEN_TEMPERATURE: Final[dict[str, float]] = {
     KEY_1.model: 0.9,
     KEY_2.model: 0.85,  # if KEY_1 and KEY_2 share a model, last write wins
+    KEY_BM_GEN.model: 0.9,
+    KEY_BR_GEN.model: 0.9,
 }
 GEN_MAX_TOKENS: Final[int] = 4096
 GEN_DEFAULT_BATCH_SIZE: Final[int] = 10  # examples per generator call

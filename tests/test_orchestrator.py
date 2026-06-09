@@ -56,7 +56,7 @@ async def _stub_prefilter_batch(examples, domain, key=None):
     ]
 
 
-async def _stub_full_score(scored, domain):
+async def _stub_full_score(scored, domain, key=None):
     return JudgedExample(
         scored=scored,
         full_score=4.0,

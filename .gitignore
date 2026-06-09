@@ -12,10 +12,15 @@ env/
 checkpoints/
 logs/
 output/
+data/
 *.duckdb
 *.duckdb.wal
 *.lance/
 .lancedb/
+
+# Local BYOK config — contains real API keys when used.
+# Copy providers.json.example -> providers.json and fill in.
+providers.json
 
 .ipynb_checkpoints/
 .pytest_cache/

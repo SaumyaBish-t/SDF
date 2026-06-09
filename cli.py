@@ -42,6 +42,15 @@ def _emit(payload: Any, *, indent: int = 2) -> None:
 async def _cmd_run(args: argparse.Namespace) -> int:
     from pipeline import orchestrator
 
+    providers = None
+    if args.providers:
+        # BYOK path — load and validate a JSON file matching ProviderConfig's
+        # schema, then hand the validated model to orchestrator.run.
+        from models import ProviderConfig
+
+        with open(args.providers, "r", encoding="utf-8") as f:
+            providers = ProviderConfig.model_validate_json(f.read())
+
     summary = await orchestrator.run(
         domain=args.domain,
         target=args.target,
@@ -49,6 +58,7 @@ async def _cmd_run(args: argparse.Namespace) -> int:
         seed=args.seed,
         gen_batch_size=args.gen_batch_size,
         resume=not args.no_resume,
+        providers=providers,
     )
     _emit(summary)
     return 0
@@ -120,6 +130,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--output", default=None, help="JSONL output path.")
     p_run.add_argument("--gen-batch-size", type=int, default=None, help="Examples per generator call.")
     p_run.add_argument("--no-resume", action="store_true", help="Ignore prior checkpoints for this domain.")
+    p_run.add_argument(
+        "--providers",
+        default=None,
+        help=(
+            "BYOK: path to a JSON file with generator/prefilter/scorer keys. "
+            "If omitted, server-side config defaults are used. "
+            'Schema: {"generator":{"api_key":"...","model":"...","base_url":"...","batch_size":4}, '
+            '"prefilter":{...}, "scorer":{...}}'
+        ),
+    )
     p_run.set_defaults(handler=_cmd_run, is_async=True)
 
     # ---- status ----------------------------------------------------------

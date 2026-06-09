@@ -138,14 +138,18 @@ async def _prefilter_worker(
     state: _RunState,
     domain: str,
     batch_size: int = 3,
+    keys_iter=None,
 ) -> None:
     """Drain raw_queue into batches and pass survivors to scored_queue.
 
     A worker pulls one item (blocking) then opportunistically drains up to
     `batch_size`-1 more without blocking, so it sends a true batch to the
-    KEY_3/KEY_4 critic rather than one-at-a-time.
+    critic rather than one-at-a-time.
+
+    `keys_iter` is an infinite iterator over prefilter KeyRoles (round-robin).
+    Defaults to the server-side pool; BYOK callers pass their own.
     """
-    keys = round_robin_prefilter_keys()
+    keys = keys_iter if keys_iter is not None else round_robin_prefilter_keys()
     while True:
         first = await raw_queue.get()
         if first is _SENTINEL:
@@ -153,6 +157,15 @@ async def _prefilter_worker(
             await scored_queue.put(_SENTINEL)
             _log.info("prefilter[%s] received sentinel — exiting", name)
             return
+
+        # Target reached — drain raw_queue without spending prefilter API
+        # budget. The downstream scorer + writer also discard on stop_event,
+        # so this just keeps the worker alive to absorb sentinels.
+        if state.stop_event.is_set():
+            raw_queue.task_done()
+            async with state.lock:
+                state.rejected_count += 1
+            continue
 
         batch: list[RawExample] = [first]
         saw_sentinel = False
@@ -203,8 +216,9 @@ async def _scorer_worker(
     accepted_queue: asyncio.Queue,
     state: _RunState,
     domain: str,
+    scorer_key: Optional[config.KeyRole] = None,
 ) -> None:
-    """KEY_5 full scorer — accept/revise/reject. Only 'accept' moves on."""
+    """Full scorer — accept/revise/reject. Only 'accept' moves on."""
     while True:
         item = await scored_queue.get()
         try:
@@ -213,9 +227,17 @@ async def _scorer_worker(
                 _log.info("scorer[%s] received sentinel — exiting", name)
                 return
 
+            # Target reached — drain without spending API budget.
+            if state.stop_event.is_set():
+                async with state.lock:
+                    state.rejected_count += 1
+                continue
+
             scored: ScoredExample = item
             try:
-                judged: JudgedExample = await full_score(scored, domain=domain)
+                judged: JudgedExample = await full_score(
+                    scored, domain=domain, key=scorer_key,
+                )
             except Exception:  # noqa: BLE001
                 _log.exception(
                     "scorer[%s] failed for example_id=%s — counting as reject",
@@ -419,6 +441,7 @@ async def run(
     n_scorer_workers: int = 2,
     n_prefilter_workers: int = 2,
     resume: bool = True,
+    providers=None,
 ) -> dict:
     """Run the pipeline until `target` accepts are written or node_sets exhaust.
 
@@ -429,13 +452,26 @@ async def run(
         seed: pass-through to the seed sampler for deterministic node_set order.
         min_coverage: per-dimension coverage minimum (sampler).
         gen_batch_size: examples per generator call.
-        n_scorer_workers: KEY_5 is batch_size=1, so 2 lets one wait on IO while
-            another is in-flight. Don't exceed KEY_5.batch_size * a small factor.
+        n_scorer_workers: full scorer concurrency (default 2 lets one wait on
+            IO while another is in-flight).
         n_prefilter_workers: one per pre-filter key is a reasonable default.
         resume: if True and a checkpoint exists for `domain`, resume from it.
+        providers: optional `models.ProviderConfig` (BYOK). When given,
+            the run uses the caller's three keys instead of the server-side
+            `config.GENERATOR_KEYS / PRE_FILTER_KEYS / FULL_SCORER_KEY`.
 
     Returns: summary dict {run_id, accepted, rejected, last_node_idx, output_path}.
     """
+    # ---- per-run key pool resolution (BYOK overrides server defaults) ----
+    if providers is not None:
+        byok_gen, byok_pre, byok_scr = config.keyroles_from_provider_config(providers)
+        gen_pool: tuple[config.KeyRole, ...] = (byok_gen,)
+        pre_pool: tuple[config.KeyRole, ...] = (byok_pre,)
+        scorer_key: Optional[config.KeyRole] = byok_scr
+    else:
+        gen_pool = config.GENERATOR_KEYS
+        pre_pool = config.PRE_FILTER_KEYS
+        scorer_key = None  # full_score() will fall back to FULL_SCORER_KEY
     # ---- node_set planning ------------------------------------------------
     taxonomy = load_taxonomy(domain)
     # Oversample 3× target — most batches lose items to dedup/rejection. The
@@ -470,9 +506,10 @@ async def run(
         initial_rejected = 0
         _log.info(
             "starting run_id=%s domain=%s target=%d node_sets=%d "
-            "(workers: gen=%d prefilter=%d scorer=%d dedup=1)",
+            "(workers: gen=%d prefilter=%d scorer=%d dedup=1) byok=%s",
             run_id, domain, target, len(node_sets),
-            len(config.GENERATOR_KEYS), n_prefilter_workers, n_scorer_workers,
+            len(gen_pool), n_prefilter_workers, n_scorer_workers,
+            providers is not None,
         )
 
     if output_path is None:
@@ -503,12 +540,17 @@ async def run(
         dedup = Deduplicator(store=store)
 
         # ---- launch workers ------------------------------------------------
-        gen_keys = round_robin_keys()
+        # Round-robin iterators built from the resolved per-run pools (BYOK
+        # or server defaults). itertools.cycle is fine here — pools are tiny.
+        from itertools import cycle as _cycle
+        gen_keys_iter = _cycle(gen_pool)
+        pre_keys_iter = _cycle(pre_pool)
+
         gen_tasks = [
             asyncio.create_task(
                 _generator_worker(
                     name=f"gen{i}",
-                    key=next(gen_keys),
+                    key=next(gen_keys_iter),
                     cursor=cursor,
                     raw_queue=raw_queue,
                     state=state,
@@ -516,7 +558,7 @@ async def run(
                 ),
                 name=f"sdf.generator.{i}",
             )
-            for i in range(len(config.GENERATOR_KEYS))
+            for i in range(len(gen_pool))
         ]
 
         pre_tasks = [
@@ -527,6 +569,7 @@ async def run(
                     scored_queue=scored_queue,
                     state=state,
                     domain=domain,
+                    keys_iter=pre_keys_iter,
                 ),
                 name=f"sdf.prefilter.{i}",
             )
@@ -541,6 +584,7 @@ async def run(
                     accepted_queue=accepted_queue,
                     state=state,
                     domain=domain,
+                    scorer_key=scorer_key,
                 ),
                 name=f"sdf.scorer.{i}",
             )

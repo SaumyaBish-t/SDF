@@ -279,7 +279,7 @@ async def test_full_score_uses_key_5_settings(monkeypatch) -> None:
     fake = _install_fake(monkeypatch, payload)
     await cs.full_score(_scored(), domain="d")
     kwargs = fake.chat.completions.last_kwargs
-    assert kwargs["model"] == config.KEY_5.model
+    assert kwargs["model"] == config.FULL_SCORER_KEY.model
     assert kwargs["temperature"] == config.FULL_SCORER_TEMPERATURE
     assert kwargs["max_tokens"] == config.FULL_SCORER_MAX_TOKENS
 

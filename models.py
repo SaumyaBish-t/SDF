@@ -8,7 +8,29 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
+
+
+# ---------------------------------------------------------------------------
+# BYOK (Bring-Your-Own-Key) — caller-supplied provider credentials, one per
+# pipeline role. Used by the FastAPI request body and CLI --providers file.
+# api_key is a SecretStr so it never appears in repr/logs/exception messages.
+# ---------------------------------------------------------------------------
+class ProviderKey(BaseModel):
+    """Credentials + model for one pipeline role (generator / prefilter / scorer)."""
+    api_key: SecretStr = Field(..., description="OpenAI-compatible bearer token")
+    model: str = Field(..., min_length=1, description="Provider's model identifier")
+    base_url: str = Field(..., min_length=1, description="OpenAI-compatible /v1 endpoint")
+    batch_size: int = Field(default=4, ge=1, le=32,
+                            description="Max concurrent in-flight requests for this role")
+
+
+class ProviderConfig(BaseModel):
+    """Three per-role keys. All three are required when BYOK is used at all —
+    partial overrides are rejected to keep cost accountability unambiguous."""
+    generator: ProviderKey
+    prefilter: ProviderKey
+    scorer: ProviderKey
 
 
 class TaxonomyNode(BaseModel):
@@ -38,7 +60,7 @@ class RawExample(BaseModel):
     prompt: str
     completion: str
     generator_model: str
-    generator_key: Literal["KEY_1", "KEY_2"]
+    generator_key: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -47,7 +69,7 @@ class ScoredExample(BaseModel):
     raw: RawExample
     prefilter_score: float
     prefilter_model: str
-    prefilter_key: Literal["KEY_3", "KEY_4"]
+    prefilter_key: str
 
 
 class JudgedExample(BaseModel):

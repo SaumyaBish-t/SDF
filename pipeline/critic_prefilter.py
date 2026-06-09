@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 from itertools import cycle
-from typing import Iterator, Literal, Optional, Sequence
+from typing import Iterator, Optional, Sequence
 
 from openai import AsyncOpenAI
 
@@ -30,17 +30,16 @@ _SEMAPHORES: dict[config.KeyRole, asyncio.Semaphore] = {
     k: asyncio.Semaphore(k.batch_size) for k in config.PRE_FILTER_KEYS
 }
 
-_KEY_NAME: dict[config.KeyRole, Literal["KEY_3", "KEY_4"]] = {
-    config.KEY_3: "KEY_3",
-    config.KEY_4: "KEY_4",
+_KEY_NAME: dict[config.KeyRole, str] = {
+    k: f"PREFILTER_{i}" for i, k in enumerate(config.PRE_FILTER_KEYS)
 }
 
 
 # ---------------------------------------------------------------------------
 # Client factory (test seam)
 # ---------------------------------------------------------------------------
-def _make_client(api_key: str) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=config.NIM_BASE_URL, api_key=api_key)
+def _make_client(key: config.KeyRole) -> AsyncOpenAI:
+    return AsyncOpenAI(base_url=key.base_url, api_key=key.api_key, timeout=60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -132,14 +131,14 @@ async def prefilter_batch(
     """
     if not examples:
         return []
-    selected = key if key is not None else config.KEY_3
-    if selected not in _KEY_NAME:
+    selected = key if key is not None else config.PRE_FILTER_KEYS[0]
+    if selected.name != "pre_filter":
         raise ValueError(f"{selected} is not a pre-filter key")
 
     prompt = build_prefilter_prompt(examples, domain)
-    client = _make_client(selected.api_key)
-    sem = _SEMAPHORES[selected]
-    key_label = _KEY_NAME[selected]
+    client = _make_client(selected)
+    sem = _SEMAPHORES.setdefault(selected, asyncio.Semaphore(selected.batch_size))
+    key_label = _KEY_NAME.get(selected, f"PREFILTER:{selected.model}")
 
     async with sem:
         text = await with_retry(

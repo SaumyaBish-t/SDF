@@ -27,7 +27,7 @@ pytestmark = pytest.mark.asyncio
 @pytest_asyncio.fixture
 async def client(monkeypatch, tmp_path):
     """Fresh app + AsyncClient per test, with orchestrator.run stubbed."""
-    async def _stub_run(*, domain, target, seed=None, resume=True, gen_batch_size=None):
+    async def _stub_run(*, domain, target, seed=None, resume=True, gen_batch_size=None, providers=None):
         await asyncio.sleep(0.01)
         out = tmp_path / f"run_{domain}.jsonl"
         out.write_text('{"id": "x", "instruction": "i", "response": "r"}\n', encoding="utf-8")

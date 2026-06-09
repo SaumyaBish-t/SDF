@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy to providers.json and fill in your own keys. NEVER commit providers.json.",
+
+  "generator": {
+    "api_key": "sk-your-generator-key",
+    "model": "your-generator-model-id",
+    "base_url": "https://your-provider.example.com/v1",
+    "batch_size": 5
+  },
+
+  "prefilter": {
+    "api_key": "sk-your-prefilter-key",
+    "model": "your-prefilter-model-id",
+    "base_url": "https://your-provider.example.com/v1",
+    "batch_size": 8
+  },
+
+  "scorer": {
+    "api_key": "sk-your-scorer-key",
+    "model": "your-scorer-model-id",
+    "base_url": "https://your-provider.example.com/v1",
+    "batch_size": 4
+  }
+}

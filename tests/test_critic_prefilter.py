@@ -112,8 +112,10 @@ def test_parse_returns_empty_on_garbage() -> None:
 # round_robin_prefilter_keys
 # ---------------------------------------------------------------------------
 def test_round_robin_cycles_prefilter_keys() -> None:
-    keys = list(islice(cp.round_robin_prefilter_keys(), 4))
-    assert keys == [config.KEY_3, config.KEY_4, config.KEY_3, config.KEY_4]
+    pool = list(config.PRE_FILTER_KEYS)
+    n = len(pool)
+    keys = list(islice(cp.round_robin_prefilter_keys(), n * 2))
+    assert keys == pool * 2
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +130,15 @@ async def test_prefilter_batch_assigns_scores_in_input_order(monkeypatch) -> Non
     ])
     _install_fake(monkeypatch, payload)
 
-    scored = await cp.prefilter_batch(_batch(3), domain="customer_support", key=config.KEY_3)
+    pf_key = config.PRE_FILTER_KEYS[0]
+    scored = await cp.prefilter_batch(_batch(3), domain="customer_support", key=pf_key)
     assert [s.prefilter_score for s in scored] == [
         config.PREFILTER_PASS_SCORE,
         config.PREFILTER_FAIL_SCORE,
         config.PREFILTER_PASS_SCORE,
     ]
-    assert [s.prefilter_key for s in scored] == ["KEY_3", "KEY_3", "KEY_3"]
-    assert [s.prefilter_model for s in scored] == [config.KEY_3.model] * 3
+    assert [s.prefilter_key for s in scored] == ["PREFILTER_0"] * 3
+    assert [s.prefilter_model for s in scored] == [pf_key.model] * 3
     # RawExample reference preserved (not copied/mutated).
     assert scored[0].raw.example_id == "ex-0"
 
@@ -146,13 +149,14 @@ async def test_prefilter_missing_verdicts_become_fail(monkeypatch) -> None:
     payload = json.dumps([{"id": 1, "pass": True}])
     _install_fake(monkeypatch, payload)
 
-    scored = await cp.prefilter_batch(_batch(3), domain="d", key=config.KEY_4)
+    pf_key = config.PRE_FILTER_KEYS[0]
+    scored = await cp.prefilter_batch(_batch(3), domain="d", key=pf_key)
     assert [s.prefilter_score for s in scored] == [
         config.PREFILTER_FAIL_SCORE,
         config.PREFILTER_PASS_SCORE,
         config.PREFILTER_FAIL_SCORE,
     ]
-    assert all(s.prefilter_key == "KEY_4" for s in scored)
+    assert all(s.prefilter_key == "PREFILTER_0" for s in scored)
 
 
 @pytest.mark.asyncio
@@ -180,11 +184,11 @@ async def test_prefilter_empty_input_short_circuits(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_prefilter_defaults_to_key_3(monkeypatch) -> None:
+async def test_prefilter_defaults_to_first_pool_key(monkeypatch) -> None:
     payload = json.dumps([{"id": 0, "pass": True}])
     _install_fake(monkeypatch, payload)
     scored = await cp.prefilter_batch(_batch(1), domain="d")
-    assert scored[0].prefilter_key == "KEY_3"
+    assert scored[0].prefilter_model == config.PRE_FILTER_KEYS[0].model
 
 
 @pytest.mark.asyncio

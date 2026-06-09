@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 import config
+from models import ProviderConfig
 from pipeline import checkpoint as ck
 from pipeline import orchestrator
 from pipeline.diversity import compute_vendi_score, coverage_gaps
@@ -46,6 +47,13 @@ class StartRunRequest(BaseModel):
     seed: Optional[int] = None
     resume: bool = True
     gen_batch_size: Optional[int] = Field(default=None, gt=0)
+    providers: Optional[ProviderConfig] = Field(
+        default=None,
+        description=(
+            "BYOK: caller-supplied keys for generator/prefilter/scorer. "
+            "If omitted, the server's configured defaults are used."
+        ),
+    )
 
 
 JobStatus = Literal["running", "done", "failed"]
@@ -129,6 +137,7 @@ async def _run_job(job_id: str, req: StartRunRequest, registry: JobRegistry) -> 
             seed=req.seed,
             resume=req.resume,
             gen_batch_size=req.gen_batch_size,
+            providers=req.providers,
         )
     except Exception as exc:  # noqa: BLE001 — funnel any failure into the job record
         _log.exception("job %s failed", job_id)
