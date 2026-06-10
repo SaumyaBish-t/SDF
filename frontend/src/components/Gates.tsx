@@ -38,8 +38,12 @@ function RubricRadar() {
     <svg viewBox="0 0 220 224" className="mx-auto w-full max-w-[340px]" role="img" aria-label="Rubric weight radar chart">
       <defs>
         <filter id="radar-glow" x="-40%" y="-40%" width="180%" height="180%">
-          <feDropShadow dx="0" dy="0" stdDeviation="2.4" floodColor="#F43F5E" floodOpacity="0.8" />
+          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#FF3162" floodOpacity="0.95" />
         </filter>
+        <linearGradient id="radar-stroke" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FF3162" />
+          <stop offset="1" stopColor="#FBBF24" />
+        </linearGradient>
       </defs>
 
       {/* grid rings */}
@@ -58,11 +62,11 @@ function RubricRadar() {
         return <line key={i} x1={CX} y1={CY} x2={x} y2={y} stroke="#272A30" strokeWidth="1" />;
       })}
 
-      {/* weight polygon — glowing 1px outline, no fill */}
-      <polygon points={poly} fill="none" stroke="#F43F5E" strokeWidth="1.4" filter="url(#radar-glow)" />
+      {/* weight polygon — glowing 1.5px outline, gradient stroke, no fill */}
+      <polygon points={poly} fill="none" stroke="url(#radar-stroke)" strokeWidth="1.6" filter="url(#radar-glow)" />
       {WEIGHTS.map((d, i) => {
         const [x, y] = pt(i, d.w / MAX_W);
-        return <circle key={d.name} cx={x} cy={y} r="2.4" fill="#F43F5E" filter="url(#radar-glow)" />;
+        return <circle key={d.name} cx={x} cy={y} r="2.8" fill="#FF3162" filter="url(#radar-glow)" />;
       })}
 
       {/* labels */}

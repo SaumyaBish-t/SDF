@@ -1,23 +1,28 @@
 @import "tailwindcss";
 
-/* ── Syntropic — Obsidian & The Triad ──────────────────────────────────────
-   bg #090A0C · surface #141519 · border #272A30
-   generator emerald #10B981 · prefilter cyan #0EA5E9 · scorer crimson #F43F5E
-   accepted gold #F59E0B · text #F8FAFC / #94A3B8                            */
+/* ── Syntropic — color-graded to the Three Judges hero ─────────────────────
+   Background reads as polished obsidian with a cool slate cast.
+   Accents are deliberately bright and saturated to match the glowing
+   auras around the judges in the hero artwork.                            */
 
 @theme {
-  --color-bg: #090a0c;
-  --color-surface: #141519;
-  --color-raised: #1a1c22;
-  --color-line: #272a30;
+  --color-bg: #0a0e14;
+  --color-surface: #131822;
+  --color-raised: #1b2230;
+  --color-line: #2b3442;
   --color-text: #f8fafc;
-  --color-muted: #94a3b8;
-  --color-faint: #565f6e;
+  --color-muted: #9aa6b8;
+  --color-faint: #5b6677;
 
-  --color-generator: #10b981;
-  --color-prefilter: #0ea5e9;
-  --color-scorer: #f43f5e;
-  --color-gold: #f59e0b;
+  /* triad — match the hero's neon auras */
+  --color-generator: #00ff95;
+  --color-generator-soft: rgba(0, 255, 149, 0.16);
+  --color-prefilter: #14c8ff;
+  --color-prefilter-soft: rgba(20, 200, 255, 0.16);
+  --color-scorer: #ff3162;
+  --color-scorer-soft: rgba(255, 49, 98, 0.18);
+  --color-gold: #fbbf24;
+  --color-gold-soft: rgba(251, 191, 36, 0.16);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", "Inter", ui-sans-serif, sans-serif;
@@ -29,17 +34,24 @@
 html {
   background: var(--color-bg);
   color: var(--color-text);
-  scroll-behavior: auto; /* Lenis owns scrolling */
+  scroll-behavior: auto;
 }
 
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  /* subtle radial vignette that mirrors the studio-light feel of the hero */
+  background:
+    radial-gradient(ellipse 85% 55% at 50% -8%, rgba(20, 200, 255, 0.07), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 15% 50%, rgba(0, 255, 149, 0.05), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 50%, rgba(255, 49, 98, 0.05), transparent 60%),
+    var(--color-bg);
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.25);
+  background: rgba(0, 255, 149, 0.32);
+  color: #04130a;
 }
 
 ::-webkit-scrollbar {
@@ -59,12 +71,11 @@ body {
 /* ── reusable bits ──────────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(9, 10, 12, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(10, 14, 20, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
-/* structural dashboard eyebrow: UPPERCASE + heavy tracking */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
@@ -80,7 +91,12 @@ body {
   border-radius: var(--radius-panel);
 }
 
-/* terminal window — pitch black, editor feel */
+.panel-glow-emerald {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    0 0 0 1px rgba(0, 255, 149, 0.15);
+}
+
 .terminal {
   background: #000000;
   border: 1px solid var(--color-line);
@@ -88,12 +104,24 @@ body {
   font-family: var(--font-mono);
 }
 
-/* functional 150ms transitions everywhere */
 .t-fast {
   transition: all 150ms ease-in-out;
 }
 
-/* slide-down for stream log entries */
+/* triad halo gradient text used for the hero headline */
+.triad-text {
+  background: linear-gradient(
+    100deg,
+    var(--color-generator) 0%,
+    #f8fafc 35%,
+    #f8fafc 60%,
+    var(--color-scorer) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

@@ -11,14 +11,14 @@ function Mark() {
       <path
         d="M16 7 L25 22 L7 22 Z"
         fill="none"
-        stroke="#272A30"
+        stroke="#2B3442"
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <circle cx="16" cy="7" r="3" fill="#10B981" />
-      <circle cx="25" cy="22" r="3" fill="#0EA5E9" />
-      <circle cx="7" cy="22" r="3" fill="#F43F5E" />
-      <circle cx="16" cy="17.5" r="2.2" fill="#F59E0B" />
+      <circle cx="16" cy="7" r="3" fill="#00FF95" />
+      <circle cx="25" cy="22" r="3" fill="#14C8FF" />
+      <circle cx="7" cy="22" r="3" fill="#FF3162" />
+      <circle cx="16" cy="17.5" r="2.2" fill="#FBBF24" />
     </svg>
   );
 }
@@ -54,7 +54,7 @@ export default function Nav() {
           </a>
           <a
             href="#console"
-            className="t-fast rounded-[4px] bg-generator px-3.5 py-1.5 text-sm font-semibold text-bg hover:shadow-[0_0_20px_rgba(16,185,129,0.35)]"
+            className="t-fast rounded-[4px] bg-generator px-3.5 py-1.5 text-sm font-semibold text-bg hover:shadow-[0_0_22px_rgba(0,255,149,0.55)]"
           >
             Start a run
           </a>

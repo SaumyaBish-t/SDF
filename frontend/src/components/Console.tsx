@@ -346,7 +346,7 @@ export default function Console() {
           <button
             type="submit"
             disabled={health !== "ok" || submitting || running}
-            className="t-fast mt-6 w-full cursor-pointer rounded-[4px] bg-generator px-6 py-3 font-semibold text-bg hover:shadow-[0_0_26px_rgba(16,185,129,0.35)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
+            className="t-fast mt-6 w-full cursor-pointer rounded-[4px] bg-generator px-6 py-3 font-semibold text-bg hover:shadow-[0_0_26px_rgba(0,255,149,0.55)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
           >
             {submitting ? "Igniting…" : running ? "Run in progress…" : "Ignite"}
           </button>
@@ -430,7 +430,7 @@ export default function Console() {
                   <a
                     href={api.exportUrl(job.job_id)}
                     download
-                    className="t-fast block w-full rounded-[4px] bg-gold px-5 py-2.5 text-center font-semibold text-bg hover:shadow-[0_0_22px_rgba(245,158,11,0.4)]"
+                    className="t-fast block w-full rounded-[4px] bg-gold px-5 py-2.5 text-center font-semibold text-bg hover:shadow-[0_0_22px_rgba(251,191,36,0.6)]"
                   >
                     Download .jsonl
                   </a>
