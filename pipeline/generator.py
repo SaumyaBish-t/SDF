@@ -134,9 +134,11 @@ async def generate_batch(
     """
     selected = key if key is not None else config.GENERATOR_KEYS[0]
     bs = batch_size if batch_size is not None else config.GEN_DEFAULT_BATCH_SIZE
-    if selected.model not in config.GEN_TEMPERATURE:
-        raise ValueError(f"No temperature configured for generator model {selected.model!r}")
-    temperature = config.GEN_TEMPERATURE[selected.model]
+    # Per-model override if set, else the project-wide default. No model-name
+    # gating — BYOK callers pass arbitrary model strings.
+    temperature = config.GEN_TEMPERATURE.get(
+        selected.model, config.GEN_TEMPERATURE_DEFAULT,
+    )
 
     prompt = build_meta_prompt(node_set, bs)
     client = _make_client(selected)

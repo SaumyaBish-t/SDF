@@ -25,10 +25,6 @@ load_dotenv(_PROJECT_ROOT / ".env")
 NIM_BASE_URL: Final[str] = os.getenv(
     "NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"
 )
-BLUESMINDS_BASE_URL: Final[str] = "https://api.bluesminds.com/v1"
-BEDROCK_BASE_URL: Final[str] = os.getenv(
-    "BEDROCK_BASE_URL", "http://localhost:4000/v1"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -83,142 +79,82 @@ def keyroles_from_provider_config(providers) -> tuple["KeyRole", "KeyRole", "Key
     return gen, pre, scr
 
 
-def _require_env(var: str) -> str:
-    val = os.getenv(var)
-    if not val:
+# ---------------------------------------------------------------------------
+# Server-side defaults — three role keys read straight from .env.
+#
+# One block per role: generator, prefilter, scorer. Each role is independent;
+# point them at the same provider or three different ones, the system doesn't
+# care as long as each base_url is OpenAI-compatible (`/chat/completions`).
+#
+# Env vars are read with safe empty-string defaults so `import config` never
+# fails. Missing values are surfaced by `validate_runtime_keys()` the moment
+# a run actually needs them — keeps test collection and `--help` snappy.
+#
+# BYOK requests (POST /runs with a `providers` block) bypass these entirely.
+# ---------------------------------------------------------------------------
+def _env(name: str, default: str = "") -> str:
+    return os.getenv(name, default)
+
+
+GENERATOR_KEY: Final[KeyRole] = KeyRole(
+    name="generator",
+    api_key=_env("SDF_GENERATOR_API_KEY"),
+    model=_env("SDF_GENERATOR_MODEL"),
+    batch_size=int(_env("SDF_GENERATOR_BATCH_SIZE", "5")),
+    base_url=_env("SDF_GENERATOR_BASE_URL"),
+)
+
+PREFILTER_KEY: Final[KeyRole] = KeyRole(
+    name="pre_filter",
+    api_key=_env("SDF_PREFILTER_API_KEY"),
+    model=_env("SDF_PREFILTER_MODEL"),
+    batch_size=int(_env("SDF_PREFILTER_BATCH_SIZE", "8")),
+    base_url=_env("SDF_PREFILTER_BASE_URL"),
+)
+
+SCORER_KEY: Final[KeyRole] = KeyRole(
+    name="full_scorer",
+    api_key=_env("SDF_SCORER_API_KEY"),
+    model=_env("SDF_SCORER_MODEL"),
+    batch_size=int(_env("SDF_SCORER_BATCH_SIZE", "4")),
+    base_url=_env("SDF_SCORER_BASE_URL"),
+)
+
+# Pools — single-element tuples. The pool shape exists for round-robin over
+# multiple keys per role (legacy NIM pattern); BYOK and single-key configs
+# just supply one element.
+GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (GENERATOR_KEY,)
+PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (PREFILTER_KEY,)
+FULL_SCORER_KEY: Final[KeyRole] = SCORER_KEY
+
+
+def validate_runtime_keys() -> None:
+    """Raise with a clear message if any role is missing api_key/model/base_url.
+
+    Called by `orchestrator.run()` and the FastAPI startup. NOT called at
+    module import so `--help`, tests, and `cli.py list-domains` still work
+    without a populated `.env`.
+    """
+    missing: list[str] = []
+    for role_key, prefix in (
+        (GENERATOR_KEY, "SDF_GENERATOR"),
+        (PREFILTER_KEY, "SDF_PREFILTER"),
+        (SCORER_KEY,    "SDF_SCORER"),
+    ):
+        for field in ("api_key", "model", "base_url"):
+            if not getattr(role_key, field):
+                missing.append(f"{prefix}_{field.upper()}")
+    if missing:
         raise RuntimeError(
-            f"Missing required environment variable: {var}. "
-            f"Copy .env.example to .env and fill in your NIM keys."
+            "Missing required env vars: " + ", ".join(missing) +
+            ". Copy .env.example to .env and fill them in."
         )
-    return val
 
 
-KEY_1: Final[KeyRole] = KeyRole(
-    name="generator",
-    api_key=_require_env("NIM_KEY_1"),
-    model="deepseek-ai/deepseek-v4-flash",
-    batch_size=10,
-)
-
-KEY_2: Final[KeyRole] = KeyRole(
-    name="generator",
-    api_key=_require_env("NIM_KEY_2"),
-    # Was "z-ai/glm4.7" — retired by NIM on 2026-05-14. Mirroring KEY_1's
-    # model lets the second key stay in rotation; semaphores are per-key
-    # so total in-flight stays at 20 generator requests.
-    model="deepseek-ai/deepseek-v4-flash",
-    batch_size=10,
-)
-
-KEY_3: Final[KeyRole] = KeyRole(
-    name="pre_filter",
-    api_key=_require_env("NIM_KEY_3"),
-    model="nvidia/nemotron-3-nano-30b-a3b",
-    # Bumped 3 → 8: observed ~0.4 RPM on this key in practice, nowhere
-    # near the 40 RPM cap. More in-flight requests drain raw_queue faster.
-    # Backoff handles any 429 if NIM pushes back.
-    batch_size=8,
-)
-
-KEY_4: Final[KeyRole] = KeyRole(
-    name="pre_filter",
-    api_key=_require_env("NIM_KEY_4"),
-    model="mistralai/mistral-small-4-119b-2603",
-    batch_size=8,
-)
-
-KEY_5: Final[KeyRole] = KeyRole(
-    name="full_scorer",
-    api_key=_require_env("NIM_KEY_5"),
-    # nano-8b was fast but sycophantic — every example came back 5/5/5/5/5,
-    # so the rubric did no work. Llama-3.3-70b-instruct is the calibration
-    # sweet spot: large enough to actually discriminate, instruction-tuned
-    # (no reasoning preamble), mainline on NIM. NIM free-tier rate-limit
-    # is the wall-clock floor anyway, so the per-call slowdown is hidden.
-    model="meta/llama-3.3-70b-instruct",
-    # Bumped 3 → 6. The embedder used to share this key — now that local
-    # sentence-transformers handles dedup vectors, KEY_5's full budget
-    # goes to scoring; raise concurrency to use it.
-    batch_size=6,
-)
-
-# ---------------------------------------------------------------------------
-# Bluesminds keys — kept defined for easy fallback, but BLUESMINDS_KEY is
-# now optional. If unset, the KEY_BM_* roles get a dummy key and any attempt
-# to actually use them would 401 — which is fine, they're not in the active
-# pools below.
-# ---------------------------------------------------------------------------
-_BM_KEY: Final[str] = os.getenv("BLUESMINDS_KEY", "unset")
-
-KEY_BM_GEN: Final[KeyRole] = KeyRole(
-    name="generator",
-    api_key=_BM_KEY,
-    model="DeepSeek-V4-Flash",   # $0.14 / $0.28 per M — same family as NIM gen
-    batch_size=5,
-    base_url=BLUESMINDS_BASE_URL,
-)
-
-KEY_BM_PREFILTER: Final[KeyRole] = KeyRole(
-    name="pre_filter",
-    api_key=_BM_KEY,
-    model="gpt-5-nano",           # $0.10 / $0.80 — cheapest input, tiny outputs
-    batch_size=8,
-    base_url=BLUESMINDS_BASE_URL,
-)
-
-KEY_BM_SCORER: Final[KeyRole] = KeyRole(
-    name="full_scorer",
-    api_key=_BM_KEY,
-    model="z-ai/glm-5.1",         # $0.60 / $0.18 — reasoning model, cheap output
-    batch_size=6,
-    base_url=BLUESMINDS_BASE_URL,
-)
-
-# ---------------------------------------------------------------------------
-# Bedrock keys (via LiteLLM proxy at http://localhost:4000/v1).
-# Model strings match the `model_name` entries in litellm_config.yaml.
-# Proxy doesn't require auth on localhost — pass a dummy api_key.
-# ---------------------------------------------------------------------------
-_BR_KEY: Final[str] = "litellm-local"  # proxy ignores this, but openai SDK requires non-empty
-
-KEY_BR_GEN: Final[KeyRole] = KeyRole(
-    name="generator",
-    api_key=_BR_KEY,
-    model="nova-lite",            # Bedrock amazon.nova-lite-v1:0 — $0.06 / $0.24 per M
-    batch_size=5,
-    base_url=BEDROCK_BASE_URL,
-)
-
-KEY_BR_PREFILTER: Final[KeyRole] = KeyRole(
-    name="pre_filter",
-    api_key=_BR_KEY,
-    model="nova-micro",           # Bedrock amazon.nova-micro-v1:0 — $0.035 / $0.14 per M
-    batch_size=8,
-    base_url=BEDROCK_BASE_URL,
-)
-
-KEY_BR_SCORER: Final[KeyRole] = KeyRole(
-    name="full_scorer",
-    api_key=_BR_KEY,
-    model="scorer",               # Bedrock meta.llama3-3-70b-instruct — $0.72 / $0.72 per M
-    batch_size=4,
-    base_url=BEDROCK_BASE_URL,
-)
-
-# Active pools — Bedrock via LiteLLM. Flip back by pointing these at
-# (KEY_BM_*,) for bluesminds or (KEY_1, KEY_2) / (KEY_3, KEY_4) / KEY_5 for NIM.
-GENERATOR_KEYS: Final[tuple[KeyRole, ...]] = (KEY_BR_GEN,)
-PRE_FILTER_KEYS: Final[tuple[KeyRole, ...]] = (KEY_BR_PREFILTER,)
-FULL_SCORER_KEY: Final[KeyRole] = KEY_BR_SCORER
-
-# Per-model sampling temperatures (PROJECT_SPEC.md §5).
-# Keyed by KeyRole.model string so generator.py needs no model-name conditionals.
-GEN_TEMPERATURE: Final[dict[str, float]] = {
-    KEY_1.model: 0.9,
-    KEY_2.model: 0.85,  # if KEY_1 and KEY_2 share a model, last write wins
-    KEY_BM_GEN.model: 0.9,
-    KEY_BR_GEN.model: 0.9,
-}
+GEN_TEMPERATURE_DEFAULT: Final[float] = 0.9
+# Per-model override map. Add an entry only if you want a specific model to
+# sample at something other than GEN_TEMPERATURE_DEFAULT.
+GEN_TEMPERATURE: Final[dict[str, float]] = {}
 GEN_MAX_TOKENS: Final[int] = 4096
 GEN_DEFAULT_BATCH_SIZE: Final[int] = 10  # examples per generator call
 

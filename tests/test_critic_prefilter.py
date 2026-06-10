@@ -21,7 +21,7 @@ def _ex(i: int, instruction: str = "what?", response: str = "answer.") -> RawExa
         node_id=f"node-{i}",
         prompt=instruction,
         completion=response,
-        generator_model=config.KEY_1.model,
+        generator_model=config.GENERATOR_KEY.model,
         generator_key="KEY_1",
     )
 
@@ -170,9 +170,9 @@ async def test_prefilter_unparseable_response_marks_all_fail(monkeypatch) -> Non
 async def test_prefilter_uses_low_temperature(monkeypatch) -> None:
     payload = json.dumps([{"id": 0, "pass": True}])
     fake = _install_fake(monkeypatch, payload)
-    await cp.prefilter_batch(_batch(1), domain="d", key=config.KEY_3)
+    await cp.prefilter_batch(_batch(1), domain="d", key=config.PREFILTER_KEY)
     assert fake.chat.completions.last_kwargs["temperature"] == config.PREFILTER_TEMPERATURE
-    assert fake.chat.completions.last_kwargs["model"] == config.KEY_3.model
+    assert fake.chat.completions.last_kwargs["model"] == config.PREFILTER_KEY.model
     assert fake.chat.completions.last_kwargs["max_tokens"] == config.PREFILTER_MAX_TOKENS
 
 
@@ -195,7 +195,7 @@ async def test_prefilter_defaults_to_first_pool_key(monkeypatch) -> None:
 async def test_prefilter_rejects_non_prefilter_key(monkeypatch) -> None:
     _install_fake(monkeypatch, "[]")
     with pytest.raises(ValueError, match="not a pre-filter key"):
-        await cp.prefilter_batch(_batch(1), domain="d", key=config.KEY_1)
+        await cp.prefilter_batch(_batch(1), domain="d", key=config.GENERATOR_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +209,7 @@ async def test_filter_passing_keeps_only_pass(monkeypatch) -> None:
         {"id": 2, "pass": True},
     ])
     _install_fake(monkeypatch, payload)
-    scored = await cp.prefilter_batch(_batch(3), domain="d", key=config.KEY_3)
+    scored = await cp.prefilter_batch(_batch(3), domain="d", key=config.PREFILTER_KEY)
     survivors = cp.filter_passing(scored)
     assert len(survivors) == 2
     assert all(s.prefilter_score == config.PREFILTER_PASS_SCORE for s in survivors)

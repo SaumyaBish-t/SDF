@@ -20,7 +20,7 @@ def _raw(i: int = 0) -> RawExample:
         node_id=f"node-{i}",
         prompt="What is the refund policy?",
         completion="Within 30 days of purchase.",
-        generator_model=config.KEY_1.model,
+        generator_model=config.GENERATOR_KEY.model,
         generator_key="KEY_1",
     )
 
@@ -29,7 +29,7 @@ def _scored(i: int = 0) -> ScoredExample:
     return ScoredExample(
         raw=_raw(i),
         prefilter_score=config.PREFILTER_PASS_SCORE,
-        prefilter_model=config.KEY_3.model,
+        prefilter_model=config.PREFILTER_KEY.model,
         prefilter_key="KEY_3",
     )
 

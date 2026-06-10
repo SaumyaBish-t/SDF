@@ -154,7 +154,7 @@ async def test_generate_batch_skips_items_missing_required_fields(monkeypatch) -
 async def test_generate_batch_retries_then_succeeds(monkeypatch) -> None:
     payload = json.dumps([{"instruction": "i", "response": "r"}])
     fake = _install_fake_client(monkeypatch, payload, fail_times=2)
-    examples = await generator.generate_batch(_ns(), key=config.KEY_1)
+    examples = await generator.generate_batch(_ns(), key=config.GENERATOR_KEY)
     assert len(examples) == 1
     assert fake.chat.completions.calls == 3  # 2 failures + 1 success
 
@@ -162,7 +162,7 @@ async def test_generate_batch_retries_then_succeeds(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_generate_batch_returns_empty_on_unparseable_output(monkeypatch) -> None:
     _install_fake_client(monkeypatch, "no json here at all")
-    examples = await generator.generate_batch(_ns(), key=config.KEY_1)
+    examples = await generator.generate_batch(_ns(), key=config.GENERATOR_KEY)
     assert examples == []
 
 

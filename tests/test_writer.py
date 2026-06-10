@@ -17,13 +17,13 @@ def _accepted(example_id: str = "ex-1") -> AcceptedExample:
         example_id=example_id,
         node_id="n-0",
         prompt="Q?", completion="A.",
-        generator_model=config.KEY_1.model,
+        generator_model=config.GENERATOR_KEY.model,
         generator_key="KEY_1",
     )
     scored = ScoredExample(
         raw=raw,
         prefilter_score=config.PREFILTER_PASS_SCORE,
-        prefilter_model=config.KEY_3.model,
+        prefilter_model=config.PREFILTER_KEY.model,
         prefilter_key="KEY_3",
     )
     judged = JudgedExample(
@@ -56,7 +56,7 @@ def test_render_record_has_hf_schema_shape() -> None:
     assert rec["reasoning_trace"] is None
     md = rec["metadata"]
     assert md["taxonomy_node"] == {"domain": "customer_support", "topic": "billing"}
-    assert md["generator_model"] == config.KEY_1.model
+    assert md["generator_model"] == config.GENERATOR_KEY.model
     assert md["critic_scores"] == {d: 4 for d in config.RUBRIC_DIMENSIONS}
     assert md["composite_score"] == 4.55
     assert md["nearest_neighbor_similarity"] == 0.71
@@ -109,11 +109,11 @@ async def test_write_jsonl_handles_unicode(tmp_path: Path) -> None:
         node_id="n-0",
         prompt="क्या आप मदद कर सकते हैं?",   # Hindi
         completion="हाँ, ज़रूर।",
-        generator_model=config.KEY_2.model,
+        generator_model=config.GENERATOR_KEY.model,
         generator_key="KEY_2",
     )
     scored = ScoredExample(
-        raw=raw, prefilter_score=1.0, prefilter_model=config.KEY_3.model, prefilter_key="KEY_3",
+        raw=raw, prefilter_score=1.0, prefilter_model=config.PREFILTER_KEY.model, prefilter_key="KEY_3",
     )
     judged = JudgedExample(
         scored=scored, full_score=4.0, rubric={d: 4 for d in config.RUBRIC_DIMENSIONS}, verdict="accept",

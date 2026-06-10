@@ -25,13 +25,13 @@ def _judged(example_id: str, prompt: str, completion: str) -> JudgedExample:
         node_id="n-0",
         prompt=prompt,
         completion=completion,
-        generator_model=config.KEY_1.model,
+        generator_model=config.GENERATOR_KEY.model,
         generator_key="KEY_1",
     )
     scored = ScoredExample(
         raw=raw,
         prefilter_score=config.PREFILTER_PASS_SCORE,
-        prefilter_model=config.KEY_3.model,
+        prefilter_model=config.PREFILTER_KEY.model,
         prefilter_key="KEY_3",
     )
     return JudgedExample(

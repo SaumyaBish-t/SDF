@@ -469,6 +469,9 @@ async def run(
         pre_pool: tuple[config.KeyRole, ...] = (byok_pre,)
         scorer_key: Optional[config.KeyRole] = byok_scr
     else:
+        # Server defaults required for non-BYOK runs — fail fast with a
+        # clear message rather than 401-ing inside a worker.
+        config.validate_runtime_keys()
         gen_pool = config.GENERATOR_KEYS
         pre_pool = config.PRE_FILTER_KEYS
         scorer_key = None  # full_score() will fall back to FULL_SCORER_KEY
