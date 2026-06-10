@@ -145,10 +145,11 @@ Cost per 10k-sample run typically lands in the $3–$15 range depending on tier.
 ```
 POST   /runs                  start a pipeline run (BYOK optional)
 GET    /runs                  list jobs in this process
-GET    /runs/{job_id}         job status + progress counters
+GET    /runs/{job_id}         job status + progress counters (live, checkpoint-fed)
 GET    /runs/{job_id}/export  stream the resulting JSONL
 GET    /coverage/{domain}     counts + gaps per taxonomy dimension
 GET    /diversity/{domain}    Vendi score on the accepted set
+GET    /domains               taxonomy domains available for runs
 GET    /healthz
 ```
 
@@ -156,6 +157,28 @@ GET    /healthz
 uvicorn api.app:app --reload --port 8000
 # OpenAPI / Swagger UI at http://localhost:8000/docs
 ```
+
+## Web console
+
+A WebGL frontend lives in `frontend/` — a 3D particle visualization of the pipeline
+(watch examples die at each gate), scroll-driven storytelling of the architecture,
+and a functional Forge Console: pick a domain, set a target, optionally paste your
+own three keys, ignite, watch live accept/reject counters, download the JSONL.
+
+```bash
+# terminal 1 — backend
+uvicorn api.app:app --port 8000
+
+# terminal 2 — frontend
+cd frontend
+npm install
+npm run dev          # → http://localhost:5173
+```
+
+Stack: React 19 + TypeScript + Vite, React Three Fiber (WebGL), GSAP ScrollTrigger +
+Lenis (scroll), Tailwind v4. The 3D scene runs entirely in a vertex shader — the main
+thread stays free — and respects `prefers-reduced-motion`. Point it at a deployed
+backend with `VITE_API_URL`.
 
 ## CLI surface
 

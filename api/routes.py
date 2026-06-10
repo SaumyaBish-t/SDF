@@ -163,6 +163,14 @@ async def healthz() -> dict:
     return {"status": "ok"}
 
 
+@router.get("/domains")
+async def list_available_domains() -> dict:
+    """Taxonomy domains available for runs — drives the frontend dropdown."""
+    from taxonomy.builder import list_domains
+
+    return {"domains": list_domains()}
+
+
 @router.post("/runs", response_model=JobInfo, status_code=202)
 async def start_run(req: StartRunRequest, request: Request) -> JobInfo:
     """Kick off a pipeline run as a background task. Returns immediately."""
