@@ -1,10 +1,10 @@
-# ⚒️ Synthetic Data Forge
+# Syntropic
 
 A taxonomy-driven pipeline that produces fine-tuning datasets you can actually train on.
 
 ![License](https://img.shields.io/badge/License-MIT-blue) ![Pipeline](https://img.shields.io/badge/Pipeline-asyncio-orange) ![API](https://img.shields.io/badge/API-FastAPI-009688) ![LLM](https://img.shields.io/badge/LLM-Bring%20Your%20Own-success)
 
-Synthetic Data Forge turns a domain taxonomy and a sample target into a curated JSONL of `(instruction, response)` pairs that have been generated, screened, scored on a 5-dimension rubric, and deduped end-to-end. Every accepted example also lands in DuckDB metadata and a LanceDB vector store, so you can audit coverage and run diversity analytics before you spend a GPU-hour on training.
+Syntropic turns a domain taxonomy and a sample target into a curated JSONL of `(instruction, response)` pairs that have been generated, screened, scored on a 5-dimension rubric, and deduped end-to-end. Every accepted example also lands in DuckDB metadata and a LanceDB vector store, so you can audit coverage and run diversity analytics before you spend a GPU-hour on training.
 
 The whole system is **provider-agnostic and per-request BYOK**: each of the three pipeline roles — generator, prefilter, scorer — takes its own `(api_key, model, base_url)`, so you can mix providers per role, swap models at runtime, or expose a frontend that lets each user supply their own keys without ever touching the server's `.env`.
 
@@ -160,10 +160,11 @@ uvicorn api.app:app --reload --port 8000
 
 ## Web console
 
-A WebGL frontend lives in `frontend/` — a 3D particle visualization of the pipeline
-(watch examples die at each gate), scroll-driven storytelling of the architecture,
-and a functional Forge Console: pick a domain, set a target, optionally paste your
-own three keys, ignite, watch live accept/reject counters, download the JSONL.
+A dark "Obsidian & Triad" frontend lives in `frontend/` — a Three Judges hero,
+scroll-driven storytelling of the pipeline, a radar chart of the scorer rubric,
+and a functional bento-grid Forge Console: pick a domain, set a target, optionally
+paste your own three keys, ignite, watch a live pipeline stream + accept/reject
+counters, preview the output, download the JSONL.
 
 ```bash
 # terminal 1 — backend
@@ -175,10 +176,11 @@ npm install
 npm run dev          # → http://localhost:5173
 ```
 
-Stack: React 19 + TypeScript + Vite, React Three Fiber (WebGL), GSAP ScrollTrigger +
-Lenis (scroll), Tailwind v4. The 3D scene runs entirely in a vertex shader — the main
-thread stays free — and respects `prefers-reduced-motion`. Point it at a deployed
-backend with `VITE_API_URL`.
+Stack: React 19 + TypeScript + Vite, GSAP ScrollTrigger + Lenis (scroll),
+Tailwind v4, Inter / Space Grotesk / JetBrains Mono. Respects
+`prefers-reduced-motion`. Point it at a deployed backend with `VITE_API_URL`.
+Drop a hero render at `frontend/public/hero.jpg` — a coded SVG scene of the
+three judges renders as fallback until then.
 
 ## CLI surface
 

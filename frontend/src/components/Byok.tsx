@@ -8,23 +8,17 @@ gsap.registerPlugin(ScrollTrigger);
 const ROLES = [
   {
     name: "generator",
-    color: "var(--color-ember)",
+    color: "var(--color-generator)",
     spend: "output tokens",
     pick: "a mid-tier model with good structured-JSON output",
-    icon: (
-      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" strokeLinejoin="round" />
-    ),
+    icon: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" strokeLinejoin="round" />,
   },
   {
     name: "prefilter",
     color: "var(--color-prefilter)",
     spend: "input tokens",
     pick: "the cheapest fast model you can find — verdicts are tiny",
-    icon: (
-      <>
-        <path d="M3 5h18l-7 8v5l-4 2v-7L3 5Z" strokeLinejoin="round" />
-      </>
-    ),
+    icon: <path d="M3 5h18l-7 8v5l-4 2v-7L3 5Z" strokeLinejoin="round" />,
   },
   {
     name: "scorer",
@@ -33,8 +27,8 @@ const ROLES = [
     pick: "a reasoning-tier model — sycophancy here poisons the dataset",
     icon: (
       <>
-        <path d="M12 3a9 9 0 1 0 9 9" strokeLinecap="round" />
-        <path d="M12 7v5l3 3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 3v18M5 7l7-4 7 4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 7l-2 7a4 4 0 0 0 8 0L9 7M19 7l-2 7a4 4 0 0 0 8 0l-2-7" strokeLinecap="round" strokeLinejoin="round" transform="scale(0.78) translate(3.4 3)" />
       </>
     ),
   },
@@ -49,13 +43,13 @@ export default function Byok() {
     const ctx = gsap.context(() => {
       gsap.fromTo(
         el.querySelectorAll("[data-role]"),
-        { y: 34, opacity: 0 },
+        { y: 14, opacity: 0 },
         {
           y: 0,
           opacity: 1,
-          duration: 0.8,
-          ease: "power3.out",
-          stagger: 0.12,
+          duration: 0.3,
+          ease: "power1.out",
+          stagger: 0.08,
           scrollTrigger: { trigger: el, start: "top 70%" },
         },
       );
@@ -66,10 +60,10 @@ export default function Byok() {
   return (
     <section ref={ref} id="byok" className="relative border-y border-line bg-surface/40 py-28 md:py-36">
       <div className="mx-auto max-w-6xl px-5">
-        <p className="mb-3 font-mono text-sm tracking-widest text-faint">BRING YOUR OWN KEYS</p>
-        <h2 className="max-w-2xl text-3xl font-bold tracking-tight md:text-4xl">
-          Three roles. Three keys. Any provider that speaks{" "}
-          <span className="font-mono text-ember">/chat/completions</span>.
+        <p className="eyebrow mb-4">bring your own keys</p>
+        <h2 className="max-w-2xl font-display text-3xl font-bold tracking-tight md:text-4xl">
+          Three judges. Three keys. Any provider that speaks{" "}
+          <span className="font-mono text-generator">/chat/completions</span>.
         </h2>
         <p className="mt-5 max-w-2xl text-muted">
           Each role takes its own <span className="font-mono text-sm">api_key + model + base_url</span>.
@@ -79,13 +73,9 @@ export default function Byok() {
 
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           {ROLES.map((r) => (
-            <div
-              key={r.name}
-              data-role
-              className="group rounded-2xl border border-line bg-surface p-6 transition-colors hover:border-faint"
-            >
+            <div key={r.name} data-role className="panel t-fast group p-6 hover:border-faint">
               <div
-                className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-lg border"
+                className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-[6px] border"
                 style={{ borderColor: r.color, color: r.color }}
               >
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
@@ -95,7 +85,7 @@ export default function Byok() {
               <h3 className="font-mono text-lg font-semibold" style={{ color: r.color }}>
                 {r.name}
               </h3>
-              <p className="mt-1 font-mono text-xs text-faint">spends: {r.spend}</p>
+              <p className="eyebrow mt-1.5">spends · {r.spend}</p>
               <p className="mt-3 text-sm leading-relaxed text-muted">Pick {r.pick}.</p>
               <div className="mt-5 space-y-1.5 font-mono text-xs text-faint">
                 <p><span className="text-muted">api_key</span> = sk-••••••••</p>

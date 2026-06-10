@@ -6,7 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5173,
+    // honors harness-assigned ports (preview tools set PORT); falls back to 5173
+    port: Number(process.env.PORT) || 5173,
     // lets container-based browsers (Playwright-in-Docker) reach the dev server
     allowedHosts: ["host.docker.internal"],
   },

@@ -17,7 +17,7 @@ from utils import setup_logging
 
 def create_app() -> FastAPI:
     setup_logging()
-    app = FastAPI(title="Synthetic Data Forge")
+    app = FastAPI(title="Syntropic")
     # Frontend dev server origins. Override with a comma-separated
     # SDF_CORS_ORIGINS for deployed frontends.
     origins = os.getenv(

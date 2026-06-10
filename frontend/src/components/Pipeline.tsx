@@ -9,7 +9,7 @@ const STAGES = [
   {
     n: "01",
     name: "Generator",
-    color: "var(--color-ember)",
+    color: "var(--color-generator)",
     headline: "Examples are forged from a taxonomy, not scraped.",
     body: "A seed sampler walks your domain taxonomy — topic, tone, complexity — and hands the generator one scenario at a time. Each call returns a batch of distinct (instruction, response) pairs, so coverage is engineered upfront instead of hoped for.",
     mono: "meta-prompt → JSON array → RawExample[]",
@@ -69,12 +69,10 @@ export default function Pipeline() {
         <div className="mx-auto grid w-full max-w-6xl gap-12 px-5 md:grid-cols-[1fr_auto]">
           {/* copy */}
           <div className="flex max-w-xl flex-col justify-center">
-            <p className="mb-3 font-mono text-sm tracking-widest text-faint">
-              THE PIPELINE
-            </p>
+            <p className="eyebrow mb-4">the pipeline</p>
             <div
               key={stage.n}
-              className={prefersReducedMotion ? "" : "animate-[fadeUp_.45s_ease-out]"}
+              className={prefersReducedMotion ? "" : "animate-[stageIn_.3s_ease-in-out]"}
             >
               <p
                 className="font-mono text-6xl font-semibold md:text-7xl"
@@ -82,13 +80,13 @@ export default function Pipeline() {
               >
                 {stage.n}
               </p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight md:text-4xl">
                 {stage.headline}
               </h2>
               <p className="mt-5 text-base leading-relaxed text-muted md:text-lg">
                 {stage.body}
               </p>
-              <p className="mt-6 inline-block rounded border border-line bg-surface px-3 py-1.5 font-mono text-xs text-muted">
+              <p className="mt-6 inline-block rounded-[4px] border border-line bg-surface px-3 py-1.5 font-mono text-xs text-muted">
                 {stage.mono}
               </p>
             </div>
@@ -97,12 +95,10 @@ export default function Pipeline() {
           {/* rail */}
           <div className="hidden items-center md:flex">
             <div className="relative flex h-[420px] flex-col items-center">
-              {/* track */}
               <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line" />
-              {/* progress */}
               <div
                 ref={railRef}
-                className="absolute inset-y-0 left-1/2 w-px origin-top -translate-x-1/2 bg-gradient-to-b from-ember via-prefilter to-accept"
+                className="absolute inset-y-0 left-1/2 w-px origin-top -translate-x-1/2 bg-gradient-to-b from-generator via-prefilter to-scorer"
                 style={{ transform: "scaleY(0)" }}
               />
               {STAGES.map((s, i) => (
@@ -111,17 +107,17 @@ export default function Pipeline() {
                   className="relative z-10 flex flex-1 flex-col items-center justify-center"
                 >
                   <div
-                    className="flex h-12 w-12 items-center justify-center rounded-full border bg-surface font-mono text-sm transition-all duration-300"
+                    className="t-fast flex h-12 w-12 items-center justify-center rounded-[6px] border bg-surface font-mono text-sm"
                     style={{
                       borderColor: i <= active ? s.color : "var(--color-line)",
                       color: i <= active ? s.color : "var(--color-faint)",
-                      boxShadow: i === active ? `0 0 26px ${s.color}55` : "none",
+                      boxShadow: i === active ? `0 0 22px ${s.color}44` : "none",
                     }}
                   >
                     {s.n}
                   </div>
                   <span
-                    className="mt-2 text-xs font-medium transition-colors duration-300"
+                    className="t-fast mt-2 font-mono text-[10px] tracking-[0.18em] uppercase"
                     style={{ color: i <= active ? "var(--color-text)" : "var(--color-faint)" }}
                   >
                     {s.name}
@@ -134,8 +130,8 @@ export default function Pipeline() {
       </div>
 
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(18px); }
+        @keyframes stageIn {
+          from { opacity: 0; transform: translateY(-6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
