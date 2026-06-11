@@ -25,10 +25,11 @@ Resume:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 import config
 from models import JudgedExample, NodeSet, RawExample, ScoredExample
@@ -398,6 +399,27 @@ async def _heartbeat(
         )
 
 
+async def _progress_reporter(
+    state: _RunState,
+    cb: Callable[[dict], Awaitable[None]],
+    interval_s: float = 1.0,
+) -> None:
+    """Push live counters to the caller (e.g. the API job registry) every
+    `interval_s`, so a UI can render progress without waiting for checkpoint
+    files — those land every CHECKPOINT_INTERVAL accepts, far too coarse for
+    a live view. Runs until cancelled; the caller sends one final snapshot
+    after the writer drains.
+    """
+    while True:
+        await asyncio.sleep(interval_s)
+        async with state.lock:
+            snapshot = _summary(state)
+        try:
+            await cb(snapshot)
+        except Exception:  # noqa: BLE001 — a UI hiccup must never kill the run
+            _log.exception("progress callback failed — continuing")
+
+
 async def _save_checkpoint(
     state: _RunState,
     accepted: int,
@@ -442,6 +464,7 @@ async def run(
     n_prefilter_workers: int = 2,
     resume: bool = True,
     providers=None,
+    progress_cb: Optional[Callable[[dict], Awaitable[None]]] = None,
 ) -> dict:
     """Run the pipeline until `target` accepts are written or node_sets exhaust.
 
@@ -459,6 +482,9 @@ async def run(
         providers: optional `models.ProviderConfig` (BYOK). When given,
             the run uses the caller's three keys instead of the server-side
             `config.GENERATOR_KEYS / PRE_FILTER_KEYS / FULL_SCORER_KEY`.
+        progress_cb: optional async callback receiving a summary dict
+            (run_id, accepted, rejected, last_node_idx, ...) about once a
+            second while the run is live, plus one final snapshot at the end.
 
     Returns: summary dict {run_id, accepted, rejected, last_node_idx, output_path}.
     """
@@ -603,6 +629,12 @@ async def run(
             name="sdf.heartbeat",
         )
 
+        progress_task: Optional[asyncio.Task] = None
+        if progress_cb is not None:
+            progress_task = asyncio.create_task(
+                _progress_reporter(state, progress_cb), name="sdf.progress",
+            )
+
         writer_task = asyncio.create_task(
             _dedup_writer_worker(
                 accepted_queue=accepted_queue,
@@ -634,6 +666,16 @@ async def run(
         # don't leak a pending task.
         state.stop_event.set()
         await heartbeat_task
+
+        if progress_task is not None:
+            progress_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await progress_task
+            # Final snapshot so the consumer lands on the exact end counters.
+            try:
+                await progress_cb(_summary(state))
+            except Exception:  # noqa: BLE001
+                _log.exception("final progress callback failed")
 
         # ---- final checkpoint ---------------------------------------------
         await _save_checkpoint(

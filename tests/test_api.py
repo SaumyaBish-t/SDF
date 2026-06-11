@@ -27,7 +27,7 @@ pytestmark = pytest.mark.asyncio
 @pytest_asyncio.fixture
 async def client(monkeypatch, tmp_path):
     """Fresh app + AsyncClient per test, with orchestrator.run stubbed."""
-    async def _stub_run(*, domain, target, seed=None, resume=True, gen_batch_size=None, providers=None):
+    async def _stub_run(*, domain, target, seed=None, resume=True, gen_batch_size=None, providers=None, progress_cb=None):
         await asyncio.sleep(0.01)
         out = tmp_path / f"run_{domain}.jsonl"
         out.write_text('{"id": "x", "instruction": "i", "response": "r"}\n', encoding="utf-8")
@@ -119,6 +119,38 @@ async def test_list_runs_includes_started_jobs(client):
     assert {j1, j2} <= listed
     await _wait_done(ac, j1)
     await _wait_done(ac, j2)
+
+
+async def test_live_progress_visible_while_running(client, monkeypatch):
+    """Counters pushed via progress_cb must surface on GET /runs/{id} mid-run."""
+    ac, _ = client
+    release = asyncio.Event()
+
+    async def _slow_run(*, domain, target, progress_cb=None, **_):
+        assert progress_cb is not None, "routes must wire a progress callback"
+        await progress_cb({
+            "run_id": "run_live", "accepted": 7, "rejected": 3, "last_node_idx": 4,
+        })
+        await release.wait()
+        return {
+            "run_id": "run_live", "domain": domain, "target": target,
+            "accepted": target, "rejected": 3, "last_node_idx": 9,
+            "output_path": None,
+        }
+
+    monkeypatch.setattr(routes_module.orchestrator, "run", _slow_run)
+    job_id = (await ac.post("/runs", json={"domain": "customer_support", "target": 10})).json()["job_id"]
+    await asyncio.sleep(0.05)  # let the background task run up to release.wait()
+
+    body = (await ac.get(f"/runs/{job_id}")).json()
+    assert body["status"] == "running"
+    assert body["accepted"] == 7
+    assert body["rejected"] == 3
+    assert body["run_id"] == "run_live"
+
+    release.set()
+    final = await _wait_done(ac, job_id)
+    assert final["accepted"] == 10
 
 
 async def test_failed_job_records_error(client, monkeypatch):

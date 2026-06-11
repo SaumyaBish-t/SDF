@@ -208,7 +208,7 @@ export default function Console() {
       {/* ── bento grid: config | stream | stats ───────────────────────── */}
       <div className="mt-8 grid gap-5 lg:grid-cols-[1.15fr_1fr_0.9fr]">
         {/* CONFIG */}
-        <form onSubmit={submit} className="panel p-6">
+        <form onSubmit={submit} className="panel min-w-0 p-6">
           <p className="eyebrow mb-5">configuration</p>
 
           <div className="space-y-4">
@@ -353,7 +353,7 @@ export default function Console() {
         </form>
 
         {/* LIVE PIPELINE STREAM */}
-        <div className="terminal flex min-h-[420px] flex-col overflow-hidden">
+        <div className="terminal flex min-h-[420px] min-w-0 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <div className="flex items-center gap-3">
               <span className="flex gap-1.5">
@@ -370,7 +370,7 @@ export default function Console() {
               <p className="font-mono text-xs text-faint">— awaiting ignition —</p>
             )}
             {stream.map((l) => (
-              <p key={l.id} className="stream-line font-mono text-xs leading-relaxed">
+              <p key={l.id} className="stream-line font-mono text-xs leading-relaxed break-words">
                 <span className="text-faint">[{l.ts}] </span>
                 <span className={toneClass[l.tone]}>{l.text}</span>
               </p>
@@ -379,7 +379,7 @@ export default function Console() {
         </div>
 
         {/* STATS */}
-        <div className="flex flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5">
           <div className="panel flex-1 p-6">
             <p className="eyebrow mb-5">run status</p>
 

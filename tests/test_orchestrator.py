@@ -175,6 +175,35 @@ def test_checkpoint_written_on_completion(patched_pipeline):
     assert payload["vendi_score"] >= 0.0
 
 
+def test_progress_cb_receives_final_snapshot(patched_pipeline):
+    snapshots: list[dict] = []
+
+    async def _cb(snapshot: dict) -> None:
+        snapshots.append(snapshot)
+
+    summary = asyncio.run(
+        orchestrator.run(
+            domain=_DOMAIN,
+            target=5,
+            output_path=patched_pipeline / "out.jsonl",
+            seed=4,
+            gen_batch_size=5,
+            n_scorer_workers=1,
+            n_prefilter_workers=1,
+            resume=False,
+            progress_cb=_cb,
+        )
+    )
+
+    # Stubbed stages finish in well under the 1s reporting interval, so the
+    # periodic ticks may never fire — but the final snapshot always must.
+    assert snapshots, "progress_cb was never invoked"
+    final = snapshots[-1]
+    assert final["accepted"] == summary["accepted"]
+    assert final["rejected"] == summary["rejected"]
+    assert final["run_id"] == summary["run_id"]
+
+
 def test_resume_skips_completed_node_sets(patched_pipeline, monkeypatch):
     # First run reaches target.
     out1 = patched_pipeline / "run1.jsonl"

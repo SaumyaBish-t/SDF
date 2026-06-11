@@ -3,7 +3,7 @@
 Endpoints:
   POST   /runs                    — start a pipeline run (background task)
   GET    /runs                    — list known jobs (in-memory registry)
-  GET    /runs/{job_id}           — job status + latest checkpoint progress
+  GET    /runs/{job_id}           — job status + live progress counters
   GET    /runs/{job_id}/export    — stream the run's JSONL output
   GET    /coverage/{domain}       — taxonomy coverage analytics (DuckDB)
   GET    /healthz                 — liveness probe
@@ -27,7 +27,6 @@ from pydantic import BaseModel, Field
 
 import config
 from models import ProviderConfig
-from pipeline import checkpoint as ck
 from pipeline import orchestrator
 from pipeline.diversity import compute_vendi_score, coverage_gaps
 from storage.store import Store
@@ -130,6 +129,18 @@ def _registry(request: Request) -> JobRegistry:
 # ---------------------------------------------------------------------------
 async def _run_job(job_id: str, req: StartRunRequest, registry: JobRegistry) -> None:
     """Execute orchestrator.run and update the job record with the summary."""
+
+    async def _progress(snapshot: dict) -> None:
+        # Live counters from the orchestrator (~1/s) so polling clients see
+        # accepted/rejected move during the run, not just at the end.
+        await registry.update(
+            job_id,
+            run_id=snapshot.get("run_id"),
+            accepted=int(snapshot.get("accepted", 0)),
+            rejected=int(snapshot.get("rejected", 0)),
+            last_node_idx=int(snapshot.get("last_node_idx", -1)),
+        )
+
     try:
         summary = await orchestrator.run(
             domain=req.domain,
@@ -138,6 +149,7 @@ async def _run_job(job_id: str, req: StartRunRequest, registry: JobRegistry) -> 
             resume=req.resume,
             gen_batch_size=req.gen_batch_size,
             providers=req.providers,
+            progress_cb=_progress,
         )
     except Exception as exc:  # noqa: BLE001 — funnel any failure into the job record
         _log.exception("job %s failed", job_id)
@@ -195,17 +207,10 @@ async def get_run(job_id: str, request: Request) -> JobInfo:
     info = await _registry(request).get(job_id)
     if info is None:
         raise HTTPException(status_code=404, detail=f"unknown job_id: {job_id}")
-
-    # While a job is in-flight, augment with the latest checkpoint counters.
-    if info.status == "running":
-        latest = await ck.load_latest(domain=info.domain)
-        if latest:
-            info = info.model_copy(update={
-                "run_id": latest.get("run_id"),
-                "accepted": int(latest.get("accepted_count", 0)),
-                "rejected": int(latest.get("rejected_count", 0)),
-                "last_node_idx": int(latest.get("last_node_idx", -1)),
-            })
+    # Live counters are pushed into the registry by the orchestrator's
+    # progress callback (~1/s), so the record is already current. Reading
+    # checkpoint files here would be both stale (one per CHECKPOINT_INTERVAL
+    # accepts) and wrong across runs (latest-by-domain may be a prior run).
     return info
 
 
