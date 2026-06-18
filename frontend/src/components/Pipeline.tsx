@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { prefersReducedMotion, useReveal } from "../lib/motion";
+import { useReveal } from "../lib/motion";
 
 interface Stage {
   n: string;
@@ -51,18 +50,34 @@ export default function Pipeline() {
   const [active, setActive] = useState(0);
   useReveal(ref);
 
+  // Switch the sticky card to whichever stage is nearest the viewport middle.
+  // Plain scroll math (no GSAP, no IntersectionObserver) so it works under
+  // prefers-reduced-motion too — this is content navigation, not decoration.
   useEffect(() => {
     const el = ref.current;
-    if (!el || prefersReducedMotion) return;
-    const triggers = STAGES.map((_, i) =>
-      ScrollTrigger.create({
-        trigger: el.querySelectorAll("[data-stage]")[i] as Element,
-        start: "top 60%",
-        end: "bottom 60%",
-        onToggle: (self) => self.isActive && setActive(i),
-      }),
-    );
-    return () => triggers.forEach((t) => t.kill());
+    if (!el) return;
+    const stages = Array.from(el.querySelectorAll<HTMLElement>("[data-stage]"));
+    const update = () => {
+      const mid = window.innerHeight / 2;
+      let best = 0;
+      let bestDist = Infinity;
+      stages.forEach((s, i) => {
+        const r = s.getBoundingClientRect();
+        const dist = Math.abs(r.top + r.height / 2 - mid);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      });
+      setActive(best);
+    };
+    update(); // sync, on mount — independent of scroll events
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
 
   const cur = STAGES[active];

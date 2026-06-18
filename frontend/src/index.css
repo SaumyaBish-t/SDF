@@ -210,6 +210,20 @@ body {
   }
 }
 
+/* marquee strip — kept alive even under reduced-motion (decorative, low-velocity,
+   and explicitly part of the intended look) */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+.marquee-track {
+  animation: marquee 38s linear infinite;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-prefilter);
   outline-offset: 2px;
@@ -229,5 +243,10 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* marquee is intentionally exempt — gentle, continuous, opt-in look */
+  .marquee-track {
+    animation-duration: 38s !important;
+    animation-iteration-count: infinite !important;
   }
 }
