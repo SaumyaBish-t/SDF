@@ -49,8 +49,14 @@ export default function Hero() {
       />
       {/* legibility veil + grid */}
       <div className="grid-lines absolute inset-0 opacity-60" aria-hidden />
+      {/* legibility scrims — left-weighted so the copy stays readable over the
+          bright core of the WebGL field, plus a soft bottom fade */}
       <div
-        className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_60%,transparent,rgba(5,7,10,0.72))]"
+        className="absolute inset-0 bg-[linear-gradient(100deg,rgba(5,7,10,0.92)_0%,rgba(5,7,10,0.66)_36%,rgba(5,7,10,0.12)_64%,transparent_82%)]"
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(5,7,10,0.5),transparent_22%,transparent_60%,rgba(5,7,10,0.85))]"
         aria-hidden
       />
 
@@ -60,7 +66,7 @@ export default function Hero() {
           Taxonomy-driven dataset forge · BYOK
         </p>
 
-        <h1 className="display fluid-hero max-w-[14ch]">
+        <h1 className="display fluid-hero max-w-[14ch] [text-shadow:0_2px_44px_rgba(5,7,10,0.85)]">
           <span data-hero-line className="block overflow-hidden">
             <span className="block">Forge data</span>
           </span>
@@ -71,7 +77,7 @@ export default function Hero() {
           </span>
         </h1>
 
-        <p data-hero-sub className="mt-7 max-w-xl text-base leading-relaxed text-muted md:text-lg">
+        <p data-hero-sub className="mt-7 max-w-xl text-base leading-relaxed text-text/85 [text-shadow:0_1px_22px_rgba(5,7,10,0.92)] md:text-lg">
           Point Syntropic at a domain taxonomy. Three judges — a{" "}
           <span className="text-generator">generator</span>, a{" "}
           <span className="text-prefilter">prefilter</span> and a{" "}

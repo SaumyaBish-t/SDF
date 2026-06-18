@@ -91,10 +91,10 @@ void main(){
   vec3 col;
   if (vLane < 0.5) col = mix(uGen, uPre, smoothstep(0.0, 0.5, vLane));
   else col = mix(uPre, uSco, smoothstep(0.5, 1.0, vLane));
-  col = mix(col, uGold, vGlow * 0.55);
-  col += vGlow * 0.25;
+  col = mix(col, uGold, vGlow * 0.5);
+  col += vGlow * 0.18;
 
-  gl_FragColor = vec4(col, alpha * (0.35 + vGlow * 0.65));
+  gl_FragColor = vec4(col, alpha * (0.22 + vGlow * 0.5));
 }
 `;
 

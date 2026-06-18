@@ -57,13 +57,21 @@ export default function Pipeline() {
     const el = ref.current;
     if (!el) return;
     const stages = Array.from(el.querySelectorAll<HTMLElement>("[data-stage]"));
+    const sticky = el.querySelector<HTMLElement>("[data-sticky-card]");
     const update = () => {
-      const mid = window.innerHeight / 2;
+      // Align the switch to the sticky card's vertical centre (so a stage flips
+      // exactly when its explanation sits beside the card), not the viewport
+      // middle. Falls back to viewport middle where the card is hidden (mobile).
+      let ref = window.innerHeight / 2;
+      if (sticky && sticky.offsetParent !== null) {
+        const sr = sticky.getBoundingClientRect();
+        ref = sr.top + sr.height / 2;
+      }
       let best = 0;
       let bestDist = Infinity;
       stages.forEach((s, i) => {
         const r = s.getBoundingClientRect();
-        const dist = Math.abs(r.top + r.height / 2 - mid);
+        const dist = Math.abs(r.top + r.height / 2 - ref);
         if (dist < bestDist) {
           bestDist = dist;
           best = i;
@@ -98,8 +106,9 @@ export default function Pipeline() {
       <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
         {/* sticky visual */}
         <div className="hidden lg:block">
-          <div className="sticky top-28">
+          <div className="sticky top-1/2 -translate-y-1/2">
             <div
+              data-sticky-card
               className="panel relative aspect-square overflow-hidden p-8"
               style={{ boxShadow: `inset 0 0 0 1px ${cur.color}22, 0 0 80px ${cur.color}14` }}
             >
@@ -157,7 +166,7 @@ export default function Pipeline() {
               key={s.id}
               data-stage
               data-reveal
-              className="border-t border-line py-10 first:border-t-0 first:pt-0 lg:py-16"
+              className="border-t border-line py-10 first:border-t-0 first:pt-0 lg:flex lg:min-h-[80vh] lg:flex-col lg:justify-center lg:border-t-0 lg:py-0"
             >
               <div className="mb-4 flex items-center gap-4">
                 <span
