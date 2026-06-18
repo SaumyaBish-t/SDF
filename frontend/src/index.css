@@ -1,61 +1,69 @@
 @import "tailwindcss";
 
-/* ── Syntropic — color-graded to the Three Judges hero ─────────────────────
-   Background reads as polished obsidian with a cool slate cast.
-   Accents are deliberately bright and saturated to match the glowing
-   auras around the judges in the hero artwork.                            */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYNTROPIC — design system
+   Obsidian canvas, a refined triad (generator / prefilter / scorer) + molten
+   gold. Built for a WebGL forge hero and scroll-driven storytelling.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme {
-  --color-bg: #0a0e14;
-  --color-surface: #131822;
-  --color-raised: #1b2230;
-  --color-line: #2b3442;
-  --color-text: #f8fafc;
-  --color-muted: #9aa6b8;
-  --color-faint: #5b6677;
+  --color-bg: #05070a;
+  --color-bg2: #080b11;
+  --color-surface: #0d1219;
+  --color-raised: #141b25;
+  --color-line: #222b38;
+  --color-faint-line: #1a212c;
+  --color-text: #f4f7fb;
+  --color-muted: #9aa7ba;
+  --color-faint: #59677b;
 
-  /* triad — match the hero's neon auras */
-  --color-generator: #00ff95;
-  --color-generator-soft: rgba(0, 255, 149, 0.16);
-  --color-prefilter: #14c8ff;
-  --color-prefilter-soft: rgba(20, 200, 255, 0.16);
-  --color-scorer: #ff3162;
-  --color-scorer-soft: rgba(255, 49, 98, 0.18);
-  --color-gold: #fbbf24;
-  --color-gold-soft: rgba(251, 191, 36, 0.16);
+  /* the triad — three judges */
+  --color-generator: #2bf5a0;
+  --color-generator-soft: rgba(43, 245, 160, 0.14);
+  --color-prefilter: #3aa0ff;
+  --color-prefilter-soft: rgba(58, 160, 255, 0.14);
+  --color-scorer: #ff5d73;
+  --color-scorer-soft: rgba(255, 93, 115, 0.16);
+  --color-gold: #ffb83d;
+  --color-gold-soft: rgba(255, 184, 61, 0.14);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", "Inter", ui-sans-serif, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --radius-panel: 6px;
+  --radius-panel: 14px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
   background: var(--color-bg);
   color: var(--color-text);
   scroll-behavior: auto;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
-  /* subtle radial vignette that mirrors the studio-light feel of the hero */
   background:
-    radial-gradient(ellipse 85% 55% at 50% -8%, rgba(20, 200, 255, 0.07), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 15% 50%, rgba(0, 255, 149, 0.05), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 50%, rgba(255, 49, 98, 0.05), transparent 60%),
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(58, 160, 255, 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 12% 30%, rgba(43, 245, 160, 0.05), transparent 55%),
+    radial-gradient(ellipse 60% 60% at 90% 70%, rgba(255, 93, 115, 0.05), transparent 55%),
     var(--color-bg);
 }
 
 ::selection {
-  background: rgba(0, 255, 149, 0.32);
+  background: rgba(43, 245, 160, 0.3);
   color: #04130a;
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 9px;
 }
 ::-webkit-scrollbar-track {
   background: var(--color-bg);
@@ -68,64 +76,124 @@ body {
   background: var(--color-faint);
 }
 
-/* ── reusable bits ──────────────────────────────────────────────────────── */
-
-.glass {
-  background: rgba(10, 14, 20, 0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
+/* ── typography helpers ─────────────────────────────────────────────────── */
 
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--color-faint);
 }
 
-.panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-panel);
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 0.96;
 }
 
-.panel-glow-emerald {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.02),
-    0 0 0 1px rgba(0, 255, 149, 0.15);
+.fluid-hero {
+  font-size: clamp(2.9rem, 12.5vw, 9.5rem);
+}
+.fluid-h2 {
+  font-size: clamp(1.9rem, 5.2vw, 3.6rem);
 }
 
-.terminal {
-  background: #000000;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-panel);
-  font-family: var(--font-mono);
-}
-
-.t-fast {
-  transition: all 150ms ease-in-out;
-}
-
-/* triad halo gradient text used for the hero headline */
+/* gradient text grading across the triad */
 .triad-text {
   background: linear-gradient(
-    100deg,
+    104deg,
     var(--color-generator) 0%,
-    #f8fafc 35%,
-    #f8fafc 60%,
+    #f4f7fb 38%,
+    #f4f7fb 58%,
     var(--color-scorer) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+.gold-text {
+  background: linear-gradient(100deg, var(--color-gold), #ffe6a8 60%, var(--color-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
+/* ── surfaces ───────────────────────────────────────────────────────────── */
+
+.glass {
+  background: rgba(8, 11, 17, 0.6);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+.panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 40%),
+    var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+}
+
+.terminal {
+  background: #03050a;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  font-family: var(--font-mono);
+}
+
+/* hairline grid texture for section backgrounds */
+.grid-lines {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 30%, transparent 100%);
+}
+
+.t-fast {
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.noise::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── reveal primitives (GSAP toggles .is-in) ────────────────────────────── */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+[data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* live stream line entrance */
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-5px);
   }
   to {
     opacity: 1;
@@ -133,21 +201,33 @@ body {
   }
 }
 .stream-line {
-  animation: slideDown 150ms ease-in-out;
+  animation: slideDown 0.16s ease-out;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 :focus-visible {
   outline: 2px solid var(--color-prefilter);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

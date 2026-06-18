@@ -160,11 +160,12 @@ uvicorn api.app:app --reload --port 8000
 
 ## Web console
 
-A dark "Obsidian & Triad" frontend lives in `frontend/` — a Three Judges hero,
-scroll-driven storytelling of the pipeline, a radar chart of the scorer rubric,
-and a functional bento-grid Forge Console: pick a domain, set a target, optionally
-paste your own three keys, ignite, watch a live pipeline stream + accept/reject
-counters, preview the output, download the JSONL.
+A dark, motion-forward frontend lives in `frontend/` — a live **WebGL forge hero**
+(a custom-GLSL particle torus-knot painted across the triad), scroll-driven
+storytelling of the three judges, an animated radar of the scorer rubric, and a
+functional bento-grid Forge Console: pick a domain, set a target, optionally paste
+your own three keys, ignite, watch a live pipeline stream + accept/reject counters,
+preview the output, download the JSONL.
 
 ```bash
 # terminal 1 — backend
@@ -176,11 +177,11 @@ npm install
 npm run dev          # → http://localhost:5173
 ```
 
-Stack: React 19 + TypeScript + Vite, GSAP ScrollTrigger + Lenis (scroll),
-Tailwind v4, Inter / Space Grotesk / JetBrains Mono. Respects
-`prefers-reduced-motion`. Point it at a deployed backend with `VITE_API_URL`.
-Drop a hero render at `frontend/public/hero.jpg` — a coded SVG scene of the
-three judges renders as fallback until then.
+Stack: React 19 + TypeScript + Vite, **Three.js** (WebGL hero), GSAP ScrollTrigger
++ Lenis (smooth scroll & reveals), Tailwind v4, Inter / Space Grotesk / JetBrains
+Mono. Fully responsive and mobile-friendly; respects `prefers-reduced-motion` and
+degrades to a static hero (append `?static` or set `localStorage.sdf-no-forge=1` to
+force the no-WebGL path). Point it at a deployed backend with `VITE_API_URL`.
 
 ## CLI surface
 

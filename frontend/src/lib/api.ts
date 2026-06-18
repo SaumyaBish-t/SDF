@@ -1,4 +1,4 @@
-/** Typed client for the Synthetic Data Forge FastAPI backend. */
+/** Typed client for the Syntropic FastAPI backend. */
 
 // 127.0.0.1 (not localhost) — on machines where Docker/WSL squat on the
 // IPv6 side of the port, `localhost` can resolve to ::1 and miss uvicorn.

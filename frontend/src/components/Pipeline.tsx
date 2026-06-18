@@ -1,140 +1,174 @@
 import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { prefersReducedMotion } from "../lib/scrollState";
+import { prefersReducedMotion, useReveal } from "../lib/motion";
 
-gsap.registerPlugin(ScrollTrigger);
+interface Stage {
+  n: string;
+  id: string;
+  color: string;
+  spend: string;
+  title: string;
+  body: string;
+  out: string;
+  glyph: React.ReactNode;
+}
 
-const STAGES = [
+const STAGES: Stage[] = [
   {
     n: "01",
-    name: "Generator",
+    id: "generator",
     color: "var(--color-generator)",
-    headline: "Examples are forged from a taxonomy, not scraped.",
-    body: "A seed sampler walks your domain taxonomy — topic, tone, complexity — and hands the generator one scenario at a time. Each call returns a batch of distinct (instruction, response) pairs, so coverage is engineered upfront instead of hoped for.",
-    mono: "meta-prompt → JSON array → RawExample[]",
+    spend: "spends · output tokens",
+    title: "Generator",
+    body: "A meta-prompt turns each sampled taxonomy node-set into a batch of distinct instruction/response pairs, emitted as one structured JSON array. Mid-tier model, long structured output.",
+    out: "→ raw_queue",
+    glyph: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" strokeLinejoin="round" />,
   },
   {
     n: "02",
-    name: "Prefilter",
+    id: "prefilter",
     color: "var(--color-prefilter)",
-    headline: "A cheap critic kills the obvious garbage first.",
-    body: "Before anything expensive happens, a fast model screens every batch for format, relevance, and coherence. Unparseable verdicts conservatively fail. Roughly a third of raw output dies here — at a fraction of a cent.",
-    mono: "pass / fail · batched · fail-safe defaults",
+    spend: "spends · input tokens",
+    title: "Prefilter",
+    body: "A cheap, fast judge reads the whole batch and emits tiny pass/fail verdicts on format, relevance and coherence. Unparseable verdicts fail closed — it kills roughly a third of garbage before the scorer ever sees it.",
+    out: "→ scored_queue",
+    glyph: <path d="M3 5h18l-7 8v5l-4 2v-7L3 5Z" strokeLinejoin="round" />,
   },
   {
     n: "03",
-    name: "Scorer",
+    id: "scorer",
     color: "var(--color-scorer)",
-    headline: "Survivors face a five-dimension rubric.",
-    body: "Factuality, instruction clarity, response quality, domain relevance, format compliance — weighted, composited, and judged: accept, revise, or reject. Accepted examples are deduped twice (MinHash + semantic cosine) before they earn a row in your dataset.",
-    mono: "composite ≥ 4.0 → accept · two-layer dedup",
+    spend: "spends · capability",
+    title: "Scorer",
+    body: "A reasoning-tier model rates every survivor on a 5-dimension weighted rubric — factuality, response quality, clarity, relevance, format. Composite ≥ 4.0 accepts; ≥ 3.0 revises; else reject.",
+    out: "→ accepted_queue",
+    glyph: <path d="M12 3v18M5 7l7-4 7 4M5 7l-2 7a4 4 0 0 0 8 0L9 7M19 7l-2 7a4 4 0 0 0 8 0l-2-7" strokeLinecap="round" strokeLinejoin="round" />,
   },
 ];
 
 export default function Pipeline() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const railRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const [active, setActive] = useState(0);
+  useReveal(ref);
 
   useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-
-    const ctx = gsap.context(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion) return;
+    const triggers = STAGES.map((_, i) =>
       ScrollTrigger.create({
-        trigger: wrap,
-        start: "top top",
-        end: "+=250%",
-        pin: true,
-        scrub: true,
-        onUpdate: (self) => {
-          const idx = Math.min(2, Math.floor(self.progress * 3));
-          setActive((prev) => (prev === idx ? prev : idx));
-          if (railRef.current) {
-            railRef.current.style.transform = `scaleY(${self.progress})`;
-          }
-        },
-      });
-    }, wrap);
-
-    return () => ctx.revert();
+        trigger: el.querySelectorAll("[data-stage]")[i] as Element,
+        start: "top 60%",
+        end: "bottom 60%",
+        onToggle: (self) => self.isActive && setActive(i),
+      }),
+    );
+    return () => triggers.forEach((t) => t.kill());
   }, []);
 
-  const stage = STAGES[active];
+  const cur = STAGES[active];
 
   return (
-    <section id="pipeline" className="relative">
-      <div ref={wrapRef} className="flex h-[100svh] items-center overflow-hidden">
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-5 md:grid-cols-[1fr_auto]">
-          {/* copy */}
-          <div className="flex max-w-xl flex-col justify-center">
-            <p className="eyebrow mb-4">the pipeline</p>
-            <div
-              key={stage.n}
-              className={prefersReducedMotion ? "" : "animate-[stageIn_.3s_ease-in-out]"}
-            >
-              <p
-                className="font-mono text-6xl font-semibold md:text-7xl"
-                style={{ color: stage.color }}
-              >
-                {stage.n}
-              </p>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight md:text-4xl">
-                {stage.headline}
-              </h2>
-              <p className="mt-5 text-base leading-relaxed text-muted md:text-lg">
-                {stage.body}
-              </p>
-              <p className="mt-6 inline-block rounded-[4px] border border-line bg-surface px-3 py-1.5 font-mono text-xs text-muted">
-                {stage.mono}
-              </p>
-            </div>
-          </div>
+    <section ref={ref} id="pipeline" className="relative mx-auto max-w-7xl px-5 py-28 md:px-8 md:py-40">
+      <div data-reveal className="mb-16 max-w-2xl">
+        <p className="eyebrow mb-4">the pipeline</p>
+        <h2 className="display fluid-h2">
+          Three roles, not one big judge.
+        </h2>
+        <p className="mt-5 text-muted">
+          Splitting the work lets a cheap model kill garbage early, a mid-tier model do the
+          writing, and your capability budget land where calibration actually matters.
+        </p>
+      </div>
 
-          {/* rail */}
-          <div className="hidden items-center md:flex">
-            <div className="relative flex h-[420px] flex-col items-center">
-              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line" />
+      <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
+        {/* sticky visual */}
+        <div className="hidden lg:block">
+          <div className="sticky top-28">
+            <div
+              className="panel relative aspect-square overflow-hidden p-8"
+              style={{ boxShadow: `inset 0 0 0 1px ${cur.color}22, 0 0 80px ${cur.color}14` }}
+            >
               <div
-                ref={railRef}
-                className="absolute inset-y-0 left-1/2 w-px origin-top -translate-x-1/2 bg-gradient-to-b from-generator via-prefilter to-scorer"
-                style={{ transform: "scaleY(0)" }}
+                className="absolute -right-20 -top-20 h-64 w-64 rounded-full blur-3xl t-fast"
+                style={{ background: cur.color, opacity: 0.16 }}
               />
-              {STAGES.map((s, i) => (
-                <div
-                  key={s.n}
-                  className="relative z-10 flex flex-1 flex-col items-center justify-center"
-                >
-                  <div
-                    className="t-fast flex h-12 w-12 items-center justify-center rounded-[6px] border bg-surface font-mono text-sm"
-                    style={{
-                      borderColor: i <= active ? s.color : "var(--color-line)",
-                      color: i <= active ? s.color : "var(--color-faint)",
-                      boxShadow: i === active ? `0 0 22px ${s.color}44` : "none",
-                    }}
+              <div className="relative flex h-full flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <span className="font-mono text-6xl font-semibold text-faint">{cur.n}</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-12 w-12 t-fast"
+                    fill="none"
+                    stroke={cur.color}
+                    strokeWidth="1.5"
+                    aria-hidden
                   >
-                    {s.n}
-                  </div>
-                  <span
-                    className="t-fast mt-2 font-mono text-[10px] tracking-[0.18em] uppercase"
-                    style={{ color: i <= active ? "var(--color-text)" : "var(--color-faint)" }}
-                  >
-                    {s.name}
-                  </span>
+                    {cur.glyph}
+                  </svg>
                 </div>
-              ))}
+
+                <div>
+                  <p className="eyebrow" style={{ color: cur.color }}>
+                    {cur.spend}
+                  </p>
+                  <h3 className="mt-2 font-display text-4xl font-semibold" style={{ color: cur.color }}>
+                    {cur.title}
+                  </h3>
+                  <p className="mt-4 font-mono text-sm text-muted">{cur.out}</p>
+                </div>
+
+                {/* mini queue diagram */}
+                <div className="flex items-center gap-1.5">
+                  {STAGES.map((s, i) => (
+                    <span
+                      key={s.id}
+                      className="t-fast h-1 flex-1 rounded-full"
+                      style={{
+                        background: i <= active ? s.color : "var(--color-line)",
+                        opacity: i <= active ? 1 : 0.5,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes stageIn {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+        {/* scrolling stages */}
+        <div className="flex flex-col">
+          {STAGES.map((s, i) => (
+            <article
+              key={s.id}
+              data-stage
+              data-reveal
+              className="border-t border-line py-10 first:border-t-0 first:pt-0 lg:py-16"
+            >
+              <div className="mb-4 flex items-center gap-4">
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border lg:hidden"
+                  style={{ borderColor: s.color, color: s.color }}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+                    {s.glyph}
+                  </svg>
+                </span>
+                <span className="font-mono text-sm text-faint">{s.n}</span>
+                <span className="eyebrow" style={{ color: s.color }}>
+                  {s.spend}
+                </span>
+              </div>
+              <h3 className="font-display text-3xl font-semibold md:text-4xl" style={{ color: s.color }}>
+                {s.title}
+              </h3>
+              <p className="mt-4 max-w-xl text-muted">{s.body}</p>
+              <p className="mt-4 font-mono text-sm" style={{ color: s.color, opacity: i === active ? 1 : 0.55 }}>
+                {s.out}
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
