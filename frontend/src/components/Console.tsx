@@ -331,10 +331,14 @@ export default function Console() {
               aria-checked={byok}
               aria-label="Toggle bring your own keys"
               onClick={() => setByok((v) => !v)}
-              className={`t-fast relative h-6 w-11 shrink-0 cursor-pointer rounded-full ${byok ? "bg-generator" : "bg-line"}`}
+              className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
+                byok ? "bg-generator" : "bg-line"
+              }`}
             >
               <span
-                className={`t-fast absolute top-0.5 h-5 w-5 rounded-full bg-text ${byok ? "translate-x-[22px]" : "translate-x-0.5"}`}
+                aria-hidden
+                className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-text shadow transition-transform duration-200 ease-out"
+                style={{ transform: byok ? "translateX(20px)" : "translateX(0)" }}
               />
             </button>
           </div>
