@@ -96,28 +96,42 @@ def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
+# Ollama Cloud — single-provider shortcut. Fill OLLAMA_API_KEY + OLLAMA_MODEL
+# in .env and all three roles (generator / prefilter / scorer) reuse them
+# unless a per-role SDF_* override is set. Ollama's OpenAI-compatible endpoint
+# lives at https://ollama.com/v1 — override via OLLAMA_BASE_URL if needed.
+OLLAMA_BASE_URL: Final[str] = _env("OLLAMA_BASE_URL", "https://ollama.com/v1")
+OLLAMA_API_KEY: Final[str] = _env("OLLAMA_API_KEY")
+OLLAMA_MODEL: Final[str] = _env("OLLAMA_MODEL")
+
+
+def _role_env(prefix: str, field: str, fallback: str) -> str:
+    """Read SDF_<PREFIX>_<FIELD>; fall back to the shared Ollama value."""
+    return _env(f"{prefix}_{field}") or fallback
+
+
 GENERATOR_KEY: Final[KeyRole] = KeyRole(
     name="generator",
-    api_key=_env("SDF_GENERATOR_API_KEY"),
-    model=_env("SDF_GENERATOR_MODEL"),
+    api_key=_role_env("SDF_GENERATOR", "API_KEY", OLLAMA_API_KEY),
+    model=_role_env("SDF_GENERATOR", "MODEL", OLLAMA_MODEL),
     batch_size=int(_env("SDF_GENERATOR_BATCH_SIZE", "5")),
-    base_url=_env("SDF_GENERATOR_BASE_URL"),
+    base_url=_role_env("SDF_GENERATOR", "BASE_URL", OLLAMA_BASE_URL),
 )
 
 PREFILTER_KEY: Final[KeyRole] = KeyRole(
     name="pre_filter",
-    api_key=_env("SDF_PREFILTER_API_KEY"),
-    model=_env("SDF_PREFILTER_MODEL"),
+    api_key=_role_env("SDF_PREFILTER", "API_KEY", OLLAMA_API_KEY),
+    model=_role_env("SDF_PREFILTER", "MODEL", OLLAMA_MODEL),
     batch_size=int(_env("SDF_PREFILTER_BATCH_SIZE", "8")),
-    base_url=_env("SDF_PREFILTER_BASE_URL"),
+    base_url=_role_env("SDF_PREFILTER", "BASE_URL", OLLAMA_BASE_URL),
 )
 
 SCORER_KEY: Final[KeyRole] = KeyRole(
     name="full_scorer",
-    api_key=_env("SDF_SCORER_API_KEY"),
-    model=_env("SDF_SCORER_MODEL"),
+    api_key=_role_env("SDF_SCORER", "API_KEY", OLLAMA_API_KEY),
+    model=_role_env("SDF_SCORER", "MODEL", OLLAMA_MODEL),
     batch_size=int(_env("SDF_SCORER_BATCH_SIZE", "4")),
-    base_url=_env("SDF_SCORER_BASE_URL"),
+    base_url=_role_env("SDF_SCORER", "BASE_URL", OLLAMA_BASE_URL),
 )
 
 # Pools — single-element tuples. The pool shape exists for round-robin over
