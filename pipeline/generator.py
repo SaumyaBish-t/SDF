@@ -84,7 +84,16 @@ def parse_json_array(text: str) -> list[dict]:
 def build_meta_prompt(node_set: NodeSet, batch_size: int) -> str:
     """Render the spec §4 meta-prompt for one NodeSet + batch size."""
     dims_json = json.dumps(node_set.dimensions, ensure_ascii=False)
+    brief_block = ""
+    if node_set.use_case:
+        # Custom-domain run — the caller described their target data in prose.
+        # Front-loading it anchors the generator before the scenario dims.
+        brief_block = (
+            "You are producing fine-tuning data for this user-described use case:\n"
+            f"---\n{node_set.use_case.strip()}\n---\n"
+        )
     return (
+        f"{brief_block}"
         f"Generate exactly {batch_size} distinct training examples for {node_set.domain} "
         f"matching this scenario: {dims_json}.\n"
         "Return ONLY a valid JSON array. No markdown, no explanation, no code fences.\n"
