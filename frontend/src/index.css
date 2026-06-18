@@ -106,16 +106,16 @@ body {
   /* vivid, no near-white midpoint — stays readable over the bright WebGL core */
   background: linear-gradient(
     100deg,
-    var(--color-generator) 0%,
-    #7dffc4 26%,
-    var(--color-prefilter) 52%,
-    #ff8da0 78%,
-    var(--color-scorer) 100%
+    #44ffb4 0%,
+    #79ffcf 24%,
+    #61baff 52%,
+    #ff90a6 78%,
+    #ff5d73 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 2px 18px rgba(5, 7, 10, 0.6));
+  filter: drop-shadow(0 1px 5px rgba(5, 7, 10, 0.55));
 }
 .gold-text {
   background: linear-gradient(100deg, var(--color-gold), #ffe6a8 60%, var(--color-gold));

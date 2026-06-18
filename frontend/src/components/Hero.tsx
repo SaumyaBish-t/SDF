@@ -52,7 +52,7 @@ export default function Hero() {
       {/* legibility scrims — left-weighted so the copy stays readable over the
           bright core of the WebGL field, plus a soft bottom fade */}
       <div
-        className="absolute inset-0 bg-[linear-gradient(100deg,rgba(5,7,10,0.92)_0%,rgba(5,7,10,0.66)_36%,rgba(5,7,10,0.12)_64%,transparent_82%)]"
+        className="absolute inset-0 bg-[radial-gradient(ellipse_80%_64%_at_36%_46%,rgba(5,7,10,0.95),rgba(5,7,10,0.66)_46%,rgba(5,7,10,0.22)_70%,transparent_85%)]"
         aria-hidden
       />
       <div
