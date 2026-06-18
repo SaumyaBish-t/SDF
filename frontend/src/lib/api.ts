@@ -24,6 +24,7 @@ export interface StartRunRequest {
   seed?: number | null;
   resume?: boolean;
   providers?: ProviderConfig | null;
+  use_case?: string | null;
 }
 
 export type JobStatus = "running" | "done" | "failed";

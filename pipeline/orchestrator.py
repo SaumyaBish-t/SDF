@@ -50,6 +50,24 @@ from taxonomy.builder import load_taxonomy
 from taxonomy.seed_sampler import sample_node_sets
 
 
+# Synthetic taxonomy used for ad-hoc "custom use case" runs where the caller
+# has no predefined taxonomy file. Dimensions are intentionally generic so
+# they apply to almost any text-generation task; min_coverage * |values| stays
+# small so target=10 still satisfies the strict coverage check.
+_CUSTOM_TAXONOMY: dict[str, list[str]] = {
+    "angle": ["direct_question", "scenario_request", "follow_up", "edge_case"],
+    "complexity": ["simple", "moderate", "advanced"],
+    "tone": ["neutral", "casual", "formal"],
+}
+
+
+def _slugify_domain(label: str) -> str:
+    """Lowercase, alnum-or-underscore label safe to use as a domain id."""
+    s = "".join(c if c.isalnum() else "_" for c in label.strip().lower())
+    s = "_".join(p for p in s.split("_") if p)
+    return s[:48] or "custom"
+
+
 _log = logging.getLogger("sdf.orchestrator")
 
 # Sentinel pushed through each queue to signal end-of-stream to consumers.
@@ -465,6 +483,7 @@ async def run(
     resume: bool = True,
     providers=None,
     progress_cb: Optional[Callable[[dict], Awaitable[None]]] = None,
+    use_case: Optional[str] = None,
 ) -> dict:
     """Run the pipeline until `target` accepts are written or node_sets exhaust.
 
@@ -502,16 +521,31 @@ async def run(
         pre_pool = config.PRE_FILTER_KEYS
         scorer_key = None  # full_score() will fall back to FULL_SCORER_KEY
     # ---- node_set planning ------------------------------------------------
-    taxonomy = load_taxonomy(domain)
+    # Custom use case: skip the domain JSON file and use a small generic
+    # taxonomy. The user's brief is threaded into every NodeSet so the
+    # generator anchors on it instead of guessing from dimension values alone.
+    if use_case:
+        taxonomy = _CUSTOM_TAXONOMY
+        domain = _slugify_domain(domain or "custom")
+    else:
+        taxonomy = load_taxonomy(domain)
     # Oversample 3× target — most batches lose items to dedup/rejection. The
     # final node_set count is just an upper bound; the run halts on `target`.
     n_node_sets = max(target * 3, target + 1)
+    # Coverage requirement = |values| * min_coverage per dimension. For the
+    # custom taxonomy that's 4 * 3 = 12, well under 3*target for any target>=4.
+    # For small targets we relax min_coverage to keep the strict check happy.
+    effective_min_coverage = min_coverage
+    if use_case:
+        max_dim = max(len(v) for v in taxonomy.values())
+        effective_min_coverage = max(1, min(min_coverage, n_node_sets // max_dim))
     node_sets = sample_node_sets(
         taxonomy=taxonomy,
         domain=domain,
         n=n_node_sets,
-        min_coverage=min_coverage,
+        min_coverage=effective_min_coverage,
         seed=seed,
+        use_case=use_case,
     )
 
     # ---- resume from checkpoint ------------------------------------------

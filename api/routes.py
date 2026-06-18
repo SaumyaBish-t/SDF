@@ -53,6 +53,16 @@ class StartRunRequest(BaseModel):
             "If omitted, the server's configured defaults are used."
         ),
     )
+    use_case: Optional[str] = Field(
+        default=None,
+        max_length=4000,
+        description=(
+            "Free-form description of the data the caller wants generated. "
+            "When set, the run skips the on-disk taxonomy file for `domain` "
+            "and uses a generic synthetic taxonomy with the brief threaded "
+            "into the generator meta-prompt. `domain` becomes a label only."
+        ),
+    )
 
 
 JobStatus = Literal["running", "done", "failed"]
@@ -150,6 +160,7 @@ async def _run_job(job_id: str, req: StartRunRequest, registry: JobRegistry) -> 
             gen_batch_size=req.gen_batch_size,
             providers=req.providers,
             progress_cb=_progress,
+            use_case=req.use_case,
         )
     except Exception as exc:  # noqa: BLE001 — funnel any failure into the job record
         _log.exception("job %s failed", job_id)

@@ -47,10 +47,15 @@ class NodeSet(BaseModel):
 
     Produced by the seed sampler, consumed by the generator's meta-prompt.
     `dimensions` example: {"topic": "billing_dispute", "tone": "frustrated", ...}
+
+    `use_case` is an optional free-form brief for custom (un-predefined) domains
+    where the caller describes their data needs in prose instead of (or in
+    addition to) a fixed taxonomy file. Generator inlines it into the meta-prompt.
     """
     node_id: str
     domain: str
     dimensions: dict[str, str]
+    use_case: Optional[str] = None
 
 
 class RawExample(BaseModel):

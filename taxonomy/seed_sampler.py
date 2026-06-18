@@ -45,6 +45,7 @@ def sample_node_sets(
     min_coverage: int = 3,
     seed: Optional[int] = None,
     strict: bool = True,
+    use_case: Optional[str] = None,
 ) -> list[NodeSet]:
     """Return n NodeSets covering every dimension value at least min_coverage times.
 
@@ -84,13 +85,21 @@ def sample_node_sets(
     for i in range(n):
         dims = {dim: columns[dim][i] for dim in taxonomy}
         node_sets.append(
-            NodeSet(node_id=f"{domain}-{i:06d}", domain=domain, dimensions=dims)
+            NodeSet(
+                node_id=f"{domain}-{i:06d}",
+                domain=domain,
+                dimensions=dims,
+                use_case=use_case,
+            )
         )
 
     rng.shuffle(node_sets)
     # Renumber after shuffle so node_id matches final position — easier debugging.
     for i, ns in enumerate(node_sets):
         node_sets[i] = NodeSet(
-            node_id=f"{domain}-{i:06d}", domain=ns.domain, dimensions=ns.dimensions
+            node_id=f"{domain}-{i:06d}",
+            domain=ns.domain,
+            dimensions=ns.dimensions,
+            use_case=ns.use_case,
         )
     return node_sets
