@@ -66,7 +66,7 @@ export default function Hero() {
           Taxonomy-driven dataset forge · BYOK
         </p>
 
-        <h1 className="display fluid-hero max-w-[14ch] [text-shadow:0_2px_44px_rgba(5,7,10,0.85)]">
+        <h1 className="display fluid-hero max-w-[14ch] [text-shadow:0_2px_28px_rgba(5,7,10,0.92),0_0_56px_rgba(5,7,10,0.6)]">
           <span data-hero-line className="block overflow-hidden">
             <span className="block">Forge data</span>
           </span>

@@ -106,7 +106,7 @@ export default function Pipeline() {
       <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
         {/* sticky visual */}
         <div className="hidden lg:block">
-          <div className="sticky top-1/2 -translate-y-1/2">
+          <div className="sticky top-28">
             <div
               data-sticky-card
               className="panel relative aspect-square overflow-hidden p-8"

@@ -103,16 +103,19 @@ body {
 
 /* gradient text grading across the triad */
 .triad-text {
+  /* vivid, no near-white midpoint — stays readable over the bright WebGL core */
   background: linear-gradient(
-    104deg,
+    100deg,
     var(--color-generator) 0%,
-    #f4f7fb 38%,
-    #f4f7fb 58%,
+    #7dffc4 26%,
+    var(--color-prefilter) 52%,
+    #ff8da0 78%,
     var(--color-scorer) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 2px 18px rgba(5, 7, 10, 0.6));
 }
 .gold-text {
   background: linear-gradient(100deg, var(--color-gold), #ffe6a8 60%, var(--color-gold));
