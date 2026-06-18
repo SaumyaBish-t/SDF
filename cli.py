@@ -15,9 +15,21 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import platform
 import sys
 from pathlib import Path
 from typing import Any, Optional
+
+
+# Windows WMI hang guard — MUST run before any scientific-stack import.
+# `platform._wmi_query` can block for minutes on hosts with a slow/unresponsive
+# WMI service; numpy.testing (via scipy, via the dedup/diversity stages) calls
+# platform.machine() at import time and stalls the whole CLI. Short-circuit it.
+if hasattr(platform, "_wmi_query"):
+    def _sdf_no_wmi(*_args, **_kwargs):
+        raise OSError("WMI query disabled by SDF to avoid Windows platform import hang")
+
+    platform._wmi_query = _sdf_no_wmi  # type: ignore[attr-defined]
 
 
 # Windows: switch off the default ProactorEventLoop. It races on shutdown

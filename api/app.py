@@ -7,6 +7,19 @@ routes and logging.
 from __future__ import annotations
 
 import os
+import platform
+
+# Windows WMI hang guard — MUST run before any scientific-stack import.
+# On some Windows hosts `platform._wmi_query` blocks for minutes when the WMI
+# service is slow/unresponsive; numpy.testing (pulled in by scipy, pulled in by
+# the dedup/diversity stages) calls platform.machine() at import time, which
+# stalls the whole API at startup. Short-circuit it — only cosmetic platform
+# strings depend on this, and callers already fall back on OSError.
+if hasattr(platform, "_wmi_query"):
+    def _sdf_no_wmi(*_args, **_kwargs):
+        raise OSError("WMI query disabled by SDF to avoid Windows platform import hang")
+
+    platform._wmi_query = _sdf_no_wmi  # type: ignore[attr-defined]
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
