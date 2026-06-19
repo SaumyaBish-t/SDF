@@ -131,6 +131,19 @@ async def _generator_worker(
 ) -> None:
     """Pull node_sets and push RawExamples to raw_queue until stop_event or exhaustion."""
     while not state.stop_event.is_set():
+        # Soft brake — before paying for an LLM call, estimate whether the
+        # examples it would produce are still needed. Counts: already-accepted,
+        # already-buffered raw, plus a `batch_size` worth this call would push.
+        # Headroom factor 1.15 covers downstream rejection rate without leaving
+        # the run starved if accept-rate dips. Without this brake, generators
+        # keep dispatching until stop_event fires from the writer, which is too
+        # late: the in-flight + buffered examples are already paid for.
+        async with state.lock:
+            accepted = state.accepted_count
+        projected = accepted + raw_queue.qsize() + batch_size
+        if projected >= int(state.target * 1.15):
+            await asyncio.sleep(0.5)
+            continue
         nxt = await cursor.next()
         if nxt is None:
             _log.info("generator[%s] exhausted node_sets", name)
@@ -529,9 +542,11 @@ async def run(
         domain = _slugify_domain(domain or "custom")
     else:
         taxonomy = load_taxonomy(domain)
-    # Oversample 3× target — most batches lose items to dedup/rejection. The
-    # final node_set count is just an upper bound; the run halts on `target`.
-    n_node_sets = max(target * 3, target + 1)
+    # Oversample 1.5× target — most batches lose items to dedup/rejection but
+    # 3× was leaving hundreds of node_sets unused when the run stopped early,
+    # which the soft brake in `_generator_worker` exists to avoid hitting.
+    # The final node_set count is just an upper bound; the run halts on `target`.
+    n_node_sets = max(int(target * 1.5), target + 1)
     # Coverage requirement = |values| * min_coverage per dimension. For the
     # custom taxonomy that's 4 * 3 = 12, well under 3*target for any target>=4.
     # For small targets we relax min_coverage to keep the strict check happy.
