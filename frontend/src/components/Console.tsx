@@ -26,10 +26,7 @@ const INPUT =
 
 export default function Console() {
   const [health, setHealth] = useState<Health>("checking");
-  const [domains, setDomains] = useState<string[]>([]);
 
-  const [mode, setMode] = useState<"preset" | "custom">("preset");
-  const [domain, setDomain] = useState("");
   const [customLabel, setCustomLabel] = useState("");
   const [useCase, setUseCase] = useState("");
   const [target, setTarget] = useState(100);
@@ -70,9 +67,6 @@ export default function Console() {
     try {
       await api.health();
       setHealth("ok");
-      const d = await api.domains();
-      setDomains(d.domains);
-      setDomain((cur) => cur || d.domains[0] || "");
       pushLine("backend connected", "generator");
     } catch {
       setHealth("down");
@@ -137,8 +131,7 @@ export default function Console() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (mode === "preset" && !domain) return setError("Pick a domain.");
-    if (mode === "custom" && useCase.trim().length < 20)
+    if (useCase.trim().length < 20)
       return setError("Describe your use case in at least 20 characters.");
     if (!byokValid)
       return setError("BYOK is on — fill api_key, model and base_url for all three judges.");
@@ -146,19 +139,16 @@ export default function Console() {
     setSubmitting(true);
     setPreview(null);
     try {
-      const effectiveDomain =
-        mode === "custom" ? (customLabel.trim() || "custom") : domain;
+      const effectiveDomain = customLabel.trim() || "custom";
       const info = await api.startRun({
         domain: effectiveDomain,
         target,
         providers: byok ? (providers as unknown as ProviderConfig) : null,
-        use_case: mode === "custom" ? useCase.trim() : null,
+        use_case: useCase.trim(),
       });
       setJob(info);
       pushLine(
-        mode === "custom"
-          ? `run ignited · custom="${effectiveDomain}" target=${target}${byok ? " · byok" : ""}`
-          : `run ignited · domain=${effectiveDomain} target=${target}${byok ? " · byok" : ""}`,
+        `run ignited · custom="${effectiveDomain}" target=${target}${byok ? " · byok" : ""}`,
         "generator",
       );
       startPolling(info.job_id);
@@ -193,7 +183,7 @@ export default function Console() {
     <section id="console" className="relative mx-auto max-w-7xl px-5 py-28 md:px-8 md:py-40">
       <div className="mb-10 max-w-2xl">
         <p className="eyebrow mb-4">forge console</p>
-        <h2 className="display fluid-h2">Point it at a domain. Watch it assemble.</h2>
+        <h2 className="display fluid-h2">Describe the data. Watch it assemble.</h2>
       </div>
 
       {/* backend status */}
@@ -229,79 +219,39 @@ export default function Console() {
           <p className="eyebrow mb-5">configuration</p>
 
           <div className="space-y-4">
-            {/* mode tabs — preset taxonomy vs custom free-form brief */}
-            <div className="flex gap-1 rounded-lg border border-line bg-raised p-1">
-              {(["preset", "custom"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={`t-fast flex-1 cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide uppercase ${
-                    mode === m ? "bg-generator text-bg" : "text-muted hover:text-text"
-                  }`}
-                >
-                  {m === "preset" ? "Preset domain" : "Custom use case"}
-                </button>
-              ))}
+            <div>
+              <label htmlFor="custom-label" className="mb-1.5 block text-sm font-medium">
+                Dataset label
+              </label>
+              <input
+                id="custom-label"
+                type="text"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                placeholder="medical_qa, legal_summaries, …"
+                className={`${INPUT} font-mono`}
+              />
+              <p className="mt-1 text-[11px] text-faint">
+                Short slug used to tag the run. Optional — defaults to "custom".
+              </p>
             </div>
-
-            {mode === "preset" ? (
-              <div>
-                <label htmlFor="domain" className="mb-1.5 block text-sm font-medium">
-                  Domain
-                </label>
-                <select
-                  id="domain"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  disabled={health !== "ok"}
-                  className={`${INPUT} cursor-pointer disabled:opacity-50`}
-                >
-                  {domains.length === 0 && <option value="">— backend offline —</option>}
-                  {domains.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label htmlFor="custom-label" className="mb-1.5 block text-sm font-medium">
-                    Dataset label
-                  </label>
-                  <input
-                    id="custom-label"
-                    type="text"
-                    value={customLabel}
-                    onChange={(e) => setCustomLabel(e.target.value)}
-                    placeholder="medical_qa, legal_summaries, …"
-                    className={`${INPUT} font-mono`}
-                  />
-                  <p className="mt-1 text-[11px] text-faint">
-                    Short slug used to tag the run. Optional — defaults to "custom".
-                  </p>
-                </div>
-                <div>
-                  <label htmlFor="use-case" className="mb-1.5 block text-sm font-medium">
-                    Describe the data you want
-                  </label>
-                  <textarea
-                    id="use-case"
-                    rows={6}
-                    value={useCase}
-                    onChange={(e) => setUseCase(e.target.value)}
-                    placeholder="e.g. Medical Q&A pairs where a patient asks about a symptom in plain language and a clinician responds with a calibrated, non-diagnostic answer that points toward next steps. Avoid prescriptions. Mix urgency levels."
-                    className={`${INPUT} resize-y leading-relaxed`}
-                  />
-                  <p className="mt-1 text-[11px] text-faint">
-                    {useCase.trim().length} chars · ≥20 required. Specifics on format,
-                    tone, edge cases, and what to avoid steer the generator hardest.
-                  </p>
-                </div>
-              </>
-            )}
+            <div>
+              <label htmlFor="use-case" className="mb-1.5 block text-sm font-medium">
+                Describe the data you want
+              </label>
+              <textarea
+                id="use-case"
+                rows={6}
+                value={useCase}
+                onChange={(e) => setUseCase(e.target.value)}
+                placeholder="e.g. Medical Q&A pairs where a patient asks about a symptom in plain language and a clinician responds with a calibrated, non-diagnostic answer that points toward next steps. Avoid prescriptions. Mix urgency levels."
+                className={`${INPUT} resize-y leading-relaxed`}
+              />
+              <p className="mt-1 text-[11px] text-faint">
+                {useCase.trim().length} chars · ≥20 required. Specifics on format,
+                tone, edge cases, and what to avoid steer the generator hardest.
+              </p>
+            </div>
 
             <div>
               <label htmlFor="target" className="mb-1.5 block text-sm font-medium">
