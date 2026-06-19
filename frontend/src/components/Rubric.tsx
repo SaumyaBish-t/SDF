@@ -10,10 +10,10 @@ const DIMS = [
   { label: "format_compliance", weight: 0.1 },
 ];
 
-const SIZE = 320;
+const SIZE = 420;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
-const RMAX = 120;
+const RMAX = 150;
 const MAXW = 0.3;
 
 function point(i: number, r: number) {
@@ -65,7 +65,7 @@ export default function Rubric() {
         <div className="grid items-center gap-14 lg:grid-cols-2">
           {/* radar */}
           <div data-reveal className="order-2 flex justify-center lg:order-1">
-            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-[400px]" role="img" aria-label="Scorer rubric weights radar">
+            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-[560px]" role="img" aria-label="Scorer rubric weights radar">
               {/* rings */}
               {[0.25, 0.5, 0.75, 1].map((f) => (
                 <polygon
@@ -79,7 +79,7 @@ export default function Rubric() {
               {/* spokes + labels */}
               {DIMS.map((d, i) => {
                 const [x, y] = point(i, RMAX);
-                const [lx, ly] = point(i, RMAX + 26);
+                const [lx, ly] = point(i, RMAX + 32);
                 return (
                   <g key={d.label}>
                     <line x1={CX} y1={CY} x2={x} y2={y} stroke="var(--color-faint-line)" strokeWidth="1" />
@@ -87,7 +87,7 @@ export default function Rubric() {
                       x={lx}
                       y={ly}
                       fill="var(--color-muted)"
-                      fontSize="9"
+                      fontSize="11"
                       fontFamily="var(--font-mono)"
                       textAnchor={lx > CX + 5 ? "start" : lx < CX - 5 ? "end" : "middle"}
                       dominantBaseline="middle"
@@ -107,7 +107,7 @@ export default function Rubric() {
               />
               {DIMS.map((d, i) => {
                 const [x, y] = point(i, (d.weight / MAXW) * RMAX);
-                return <circle key={d.label} cx={x} cy={y} r="3" fill="var(--color-gold)" />;
+                return <circle key={d.label} cx={x} cy={y} r="4" fill="var(--color-gold)" />;
               })}
               <defs>
                 <linearGradient id="triadGrad" x1="0" y1="0" x2="1" y2="1">
@@ -132,14 +132,14 @@ export default function Rubric() {
               </p>
             </div>
 
-            <div data-reveal className="mt-8 space-y-3.5">
+            <div data-reveal className="mt-10 space-y-5">
               {DIMS.map((d) => (
                 <div key={d.label}>
-                  <div className="mb-1 flex items-baseline justify-between font-mono text-xs">
+                  <div className="mb-1.5 flex items-baseline justify-between font-mono text-sm">
                     <span className="text-muted">{d.label}</span>
                     <span className="text-gold">{d.weight.toFixed(2)}</span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-raised">
+                  <div className="h-2 overflow-hidden rounded-full bg-raised">
                     <div
                       data-bar
                       className="h-full rounded-full bg-gradient-to-r from-generator via-prefilter to-scorer"
