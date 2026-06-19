@@ -226,7 +226,7 @@ MINHASH_THRESHOLD: Final[float] = 0.7    # Jaccard similarity for MinHash LSH
 # ---------------------------------------------------------------------------
 # Pipeline orchestration
 # ---------------------------------------------------------------------------
-QUEUE_RAW_MAXSIZE: Final[int] = 200       # generator -> pre_filter
+QUEUE_RAW_MAXSIZE: Final[int] = 30        # generator -> pre_filter
 QUEUE_SCORED_MAXSIZE: Final[int] = 100    # pre_filter -> full_scorer
 QUEUE_ACCEPTED_MAXSIZE: Final[int] = 100  # full_scorer -> deduplicator
 
